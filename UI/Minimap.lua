@@ -164,7 +164,13 @@ end
 function Minimap_Module:UpdateVisibility()
     if not minimapButton then return end
 
-    if VE_DB.minimap.hide or not VE_DB.minimap.showMinimapButton then
+    -- Check both legacy VE_DB.minimap and Store config (config tab uses Store)
+    local storeConfig = VE.Store and VE.Store:GetState() and VE.Store:GetState().config
+    local showFromConfig = storeConfig and storeConfig.showMinimapButton
+    local showFromDB = VE_DB.minimap.showMinimapButton
+
+    -- Hide if either source says to hide, or if legacy hide flag is set
+    if VE_DB.minimap.hide or (showFromConfig == false) or (showFromConfig == nil and not showFromDB) then
         minimapButton:Hide()
     else
         minimapButton:Show()
@@ -175,6 +181,10 @@ function Minimap_Module:Show()
     if minimapButton then
         VE_DB.minimap.hide = false
         VE_DB.minimap.showMinimapButton = true
+        -- Also update Store config to keep in sync
+        if VE.Store then
+            VE.Store:Dispatch("SET_CONFIG", { key = "showMinimapButton", value = true })
+        end
         self:UpdateVisibility()
     end
 end
@@ -182,6 +192,10 @@ end
 function Minimap_Module:Hide()
     if minimapButton then
         VE_DB.minimap.hide = true
+        -- Also update Store config to keep in sync
+        if VE.Store then
+            VE.Store:Dispatch("SET_CONFIG", { key = "showMinimapButton", value = false })
+        end
         self:UpdateVisibility()
     end
 end

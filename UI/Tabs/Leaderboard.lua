@@ -12,8 +12,31 @@ local function GetColors()
     return VE.Constants:GetThemeColors()
 end
 
+-- My characters tracking (highlights all player's alts in leaderboard)
+local function GetMyCharacters()
+    VE_DB = VE_DB or {}
+    VE_DB.myCharacters = VE_DB.myCharacters or {}
+    return VE_DB.myCharacters
+end
+
+local function RegisterCurrentCharacter()
+    local charName = UnitName("player")
+    if charName then
+        local myChars = GetMyCharacters()
+        myChars[charName] = true
+    end
+end
+
+local function IsMyCharacter(name)
+    local myChars = GetMyCharacters()
+    return myChars[name] == true
+end
+
 function VE.UI.Tabs:CreateLeaderboard(parent)
     local UI = VE.Constants.UI
+
+    -- Register current character for multi-char highlighting
+    RegisterCurrentCharacter()
 
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
@@ -55,6 +78,82 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
 
     -- Pool of leaderboard rows
     container.rows = {}
+
+    -- ========================================================================
+    -- SUMMARY ROW (Total for all player characters)
+    -- ========================================================================
+
+    local summaryRow = CreateFrame("Frame", nil, scrollContent, "BackdropTemplate")
+    summaryRow:SetHeight(26)
+    summaryRow:SetPoint("TOPLEFT", 0, 0)
+    summaryRow:SetPoint("TOPRIGHT", 0, 0)
+    summaryRow:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    container.summaryRow = summaryRow
+
+    local summaryC = GetColors()
+    summaryRow:SetBackdropColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b, 0.2)
+    summaryRow:SetBackdropBorderColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b, 0.4)
+
+    -- Sum icon/label
+    local summaryLabel = summaryRow:CreateFontString(nil, "OVERLAY")
+    summaryLabel:SetPoint("LEFT", 8, 0)
+    VE.Theme.ApplyFont(summaryLabel, summaryC)
+    summaryLabel:SetText("|TInterface\\MINIMAP\\TRACKING\\Banker:14:14:0:0|t My Total")
+    summaryLabel:SetTextColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b)
+    summaryRow.label = summaryLabel
+
+    -- Character count
+    local summaryCount = summaryRow:CreateFontString(nil, "OVERLAY")
+    summaryCount:SetPoint("LEFT", summaryLabel, "RIGHT", 6, 0)
+    VE.Theme.ApplyFont(summaryCount, summaryC, "small")
+    summaryCount:SetTextColor(summaryC.text_dim.r, summaryC.text_dim.g, summaryC.text_dim.b)
+    summaryRow.charCount = summaryCount
+
+    -- Total amount
+    local summaryAmount = summaryRow:CreateFontString(nil, "OVERLAY")
+    summaryAmount:SetPoint("RIGHT", -8, 0)
+    summaryAmount:SetJustifyH("RIGHT")
+    VE.Theme.ApplyFont(summaryAmount, summaryC)
+    summaryAmount:SetTextColor(summaryC.endeavor.r, summaryC.endeavor.g, summaryC.endeavor.b)
+    summaryRow.amount = summaryAmount
+
+    summaryRow:Hide()
+
+    function container:UpdateSummaryRow(contributions)
+        local myChars = GetMyCharacters()
+        local totalContrib = 0
+        local charCount = 0
+
+        for name, _ in pairs(myChars) do
+            if contributions[name] then
+                totalContrib = totalContrib + contributions[name]
+                charCount = charCount + 1
+            end
+        end
+
+        if charCount > 0 then
+            local colors = GetColors()
+            self.summaryRow:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.2)
+            self.summaryRow:SetBackdropBorderColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.4)
+            self.summaryRow.label:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
+            VE.Theme.ApplyFont(self.summaryRow.label, colors)
+            self.summaryRow.charCount:SetText("(" .. charCount .. " char" .. (charCount > 1 and "s" or "") .. ")")
+            self.summaryRow.charCount:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(self.summaryRow.charCount, colors, "small")
+            self.summaryRow.amount:SetText(string.format("%.1f", totalContrib))
+            self.summaryRow.amount:SetTextColor(colors.endeavor.r, colors.endeavor.g, colors.endeavor.b)
+            VE.Theme.ApplyFont(self.summaryRow.amount, colors)
+            self.summaryRow:Show()
+            return true
+        else
+            self.summaryRow:Hide()
+            return false
+        end
+    end
 
     -- ========================================================================
     -- CREATE LEADERBOARD ROW
@@ -139,9 +238,8 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
             self.amount:SetTextColor(colors.endeavor.r, colors.endeavor.g, colors.endeavor.b)
             VE.Theme.ApplyFont(self.amount, colors)
 
-            -- Highlight current player
-            local currentPlayer = UnitName("player")
-            self.isCurrentPlayer = (playerName == currentPlayer)
+            -- Highlight player's characters (current + alts)
+            self.isCurrentPlayer = IsMyCharacter(playerName)
             if self.isCurrentPlayer then
                 self.name:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a)
                 self:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a * 0.15)
@@ -217,8 +315,11 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
         end
         table.sort(sorted, function(a, b) return a.amount > b.amount end)
 
+        -- Update summary row (shows total for all player characters)
+        local hasSummary = self:UpdateSummaryRow(contributions)
+
         -- Display rows
-        local yOffset = 0
+        local yOffset = hasSummary and 30 or 0  -- Leave room for summary row
         local rowHeight = 24
         local rowSpacing = 2
 

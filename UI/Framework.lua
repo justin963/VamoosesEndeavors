@@ -142,17 +142,15 @@ function VE.UI:CreateMainFrame(name, title)
 
     refreshBtn:SetScript("OnClick", function()
         if VE.EndeavorTracker then
-            -- Refresh endeavor data
-            VE.EndeavorTracker:FetchEndeavorData()
-            -- Also request activity log refresh
-            VE.EndeavorTracker:RequestActivityLog()
+            -- Refresh all endeavor data (handles correct API call order)
+            VE.EndeavorTracker:RefreshAll()
         end
         if VE.HousingTracker then
             -- Refresh housing data (coupons, house level)
             VE.HousingTracker:RequestHouseInfo()
             VE.HousingTracker:UpdateCoupons()
         end
-        -- Refresh whichever tab is currently shown
+        -- Refresh whichever tab is currently shown (after data loads)
         C_Timer.After(0.5, function()
             if VE.MainFrame then
                 if VE.MainFrame.endeavorsTab and VE.MainFrame.endeavorsTab:IsShown() then
@@ -201,8 +199,8 @@ function VE.UI:CreateMainFrame(name, title)
     minimizeBtn:SetScript("OnClick", function()
         frame.isMinimized = not frame.isMinimized
         if frame.isMinimized then
-            -- Collapse to header only (title bar + tab bar + header section + stats row)
-            frame:SetHeight(106)
+            -- Collapse to header only (title bar + tab bar + header section + stats row + fetch status)
+            frame:SetHeight(UI.headerContentOffset)
             minimizeIcon:SetText("+")
             -- Hide content area
             if frame.content then
@@ -359,23 +357,43 @@ end
 -- TAB BUTTON
 -- ============================================================================
 
-function VE.UI:CreateTabButton(parent, text)
+function VE.UI:CreateTabButton(parent, text, options)
+    options = options or {}
     local Colors = GetScheme()
     local UI = VE.Constants.UI or {}
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(UI.tabWidth or 90, UI.tabHeight or 24)
     btn:SetBackdrop(BACKDROP_FLAT)
 
-    local label = btn:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("CENTER")
-    VE.Theme.ApplyFont(label, Colors, "small")
-    label:SetText(text)
-    btn.label = label
+    -- Support icon-only tabs (atlas icons)
+    if options.icon then
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(14, 14)
+        icon:SetPoint("CENTER")
+        icon:SetAtlas(options.icon)
+        btn.icon = icon
+        btn.iconDefault = options.icon
+        btn.iconActive = options.iconActive or options.icon
+    else
+        local label = btn:CreateFontString(nil, "OVERLAY")
+        label:SetPoint("CENTER")
+        VE.Theme.ApplyFont(label, Colors, "small")
+        label:SetText(text)
+        btn.label = label
+    end
 
     btn.isActive = false
 
     function btn:SetActive(active)
         self.isActive = active
+        -- Update icon atlas if using icon mode
+        if self.icon then
+            if active then
+                self.icon:SetAtlas(self.iconActive)
+            else
+                self.icon:SetAtlas(self.iconDefault)
+            end
+        end
         -- Re-apply theme (the TabButton skinner handles active state)
         if VE.Theme and VE.Theme.Skinners and VE.Theme.Skinners.TabButton then
             VE.Theme.Skinners.TabButton(self, VE.Theme:GetScheme())
@@ -532,8 +550,8 @@ function VE.UI:CreateTaskRow(parent, options)
 
     -- Coupon reward badge (shows +3 coupons)
     local couponBg = CreateFrame("Frame", nil, row, "BackdropTemplate")
-    couponBg:SetSize(26, 16)
-    couponBg:SetPoint("RIGHT", 0, 0)
+    couponBg:SetSize(26, 18)
+    couponBg:SetPoint("RIGHT", -4, 0)
     couponBg:SetBackdrop(BACKDROP_FLAT)
     couponBg:SetBackdropColor(Colors.accent.r, Colors.accent.g, Colors.accent.b, Colors.accent.a * 0.3)
     couponBg:SetBackdropBorderColor(Colors.accent.r, Colors.accent.g, Colors.accent.b, Colors.accent.a * 0.6)
@@ -548,7 +566,7 @@ function VE.UI:CreateTaskRow(parent, options)
 
     -- Points badge
     local pointsBg = CreateFrame("Frame", nil, row, "BackdropTemplate")
-    pointsBg:SetSize(32, 16)
+    pointsBg:SetSize(32, 24)
     pointsBg:SetPoint("RIGHT", couponBg, "LEFT", -4, 0)
     pointsBg:SetBackdrop(BACKDROP_FLAT)
     pointsBg:SetBackdropColor(Colors.endeavor.r, Colors.endeavor.g, Colors.endeavor.b, Colors.endeavor.a * 0.3)
@@ -672,16 +690,16 @@ function VE.UI:CreateDropdown(parent, options)
     text:SetPoint("LEFT", 8, 0)
     text:SetPoint("RIGHT", -20, 0)
     text:SetJustifyH("LEFT")
+    text:SetWordWrap(false)
     VE.Theme.ApplyFont(text, Colors, "small")
     text:SetTextColor(Colors.text.r, Colors.text.g, Colors.text.b)
     container.text = text
 
-    -- Arrow
-    local arrow = container:CreateFontString(nil, "OVERLAY")
-    arrow:SetPoint("RIGHT", -6, 0)
-    VE.Theme.ApplyFont(arrow, Colors, "small")
-    arrow:SetText("v")
-    arrow:SetTextColor(Colors.text_dim.r, Colors.text_dim.g, Colors.text_dim.b)
+    -- Arrow icon
+    local arrow = container:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(12, 12)
+    arrow:SetPoint("RIGHT", -4, 0)
+    arrow:SetAtlas("housing-floor-arrow-down-pressed")
 
     -- Dropdown menu (hidden by default)
     local menu = CreateFrame("Frame", nil, container, "BackdropTemplate")

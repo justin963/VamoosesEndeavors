@@ -165,6 +165,11 @@ SlashCmdList["VE"] = function(msg)
         for k, _ in pairs(state.characters) do
             print("    -", k)
         end
+    elseif command == "xpdump" then
+        -- Debug: dump task XP data for DR analysis
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:DumpTaskXPData()
+        end
     elseif command == "tasks" then
         -- Debug: dump task structure - search for specific tasks
         print("|cFF2aa198[VE]|r Searching for debug tasks...")

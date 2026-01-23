@@ -2,6 +2,35 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.0 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- House XP Earned: Shows estimated total House XP from completed endeavors
+  - Progressive diminishing returns formula: factor = 0.96 - 0.10 * n
+  - Known base values for each task type (50, 25, 150, 10)
+  - Tooltip explains the formula and progression
+- Task Sorting: Sort task list by XP or Coupons (ascending/descending)
+  - Sort state persists across sessions
+  - Completed tasks always sort to bottom
+- Discord Link: Improved display with Discord icon, auto-select, copy hint
+- Debug Command: /ve xpdump shows task XP data for analysis
+
+BUG FIXES:
+- Non-repeatable tasks now show base coupon reward (no DR applied)
+- Coupon badge no longer cut off on right side
+
+UI IMPROVEMENTS:
+- House XP Formula section in Config tab with base value reference
+- Coupon badge slightly taller for better text fit
+
+TECHNICAL:
+- GetTaskTotalHouseXPEarned() calculates XP with progressive DR
+- TASK_BASE_VALUES lookup table for known base values by task pattern
+- Sort state saved to VE_DB.ui.taskSort
+
+--------------------------------------------------------------------------------
+
 Version 1.4.0 (Released January 2026)
 --------------------------------------------------------------------------------
 

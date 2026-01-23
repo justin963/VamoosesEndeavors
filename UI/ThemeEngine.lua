@@ -33,15 +33,15 @@ VE.Theme.BACKDROP_BORDERLESS = {
 
 function VE.Theme:Initialize()
     -- Set initial scheme based on saved config
-    local themeKey = "dark"
+    local themeKey = "housingtheme"
     if VE.Store and VE.Store.state and VE.Store.state.config then
-        themeKey = VE.Store.state.config.theme or "dark"
+        themeKey = VE.Store.state.config.theme or "housingtheme"
     elseif VE_DB and VE_DB.config and VE_DB.config.theme then
-        themeKey = VE_DB.config.theme or "dark"
+        themeKey = VE_DB.config.theme or "housingtheme"
     end
     -- Convert key to scheme name using ThemeNames lookup
-    local themeName = VE.Constants.ThemeNames[themeKey] or "SolarizedDark"
-    self.currentScheme = VE.Colors.Schemes[themeName] or VE.Colors.Schemes.SolarizedDark
+    local themeName = VE.Constants.ThemeNames[themeKey] or "HousingTheme"
+    self.currentScheme = VE.Colors.Schemes[themeName] or VE.Colors.Schemes.HousingTheme
 
     -- Listen for theme update events
     if VE.EventBus then

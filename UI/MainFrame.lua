@@ -129,10 +129,11 @@ function VE:CreateMainWindow()
             -- Generate hex from RGB for current theme colors
             local accentHex = string.format("%02x%02x%02x", math.floor(C.accent.r * 255), math.floor(C.accent.g * 255), math.floor(C.accent.b * 255))
             local dimHex = string.format("%02x%02x%02x", math.floor(C.text_dim.r * 255), math.floor(C.text_dim.g * 255), math.floor(C.text_dim.b * 255))
+            local houseIcon = "|A:housing-map-plot-occupied-highlight:12:12|a"
             if level >= maxLevel then
-                self.houseLevelText:SetText(string.format("|cFF%sHouse|r |cFF%sLv %d|r |cFF%s(Max)|r", dimHex, accentHex, level, dimHex))
+                self.houseLevelText:SetText(string.format("%s |cFF%sLv %d|r |cFF%s(Max)|r", houseIcon, accentHex, level, dimHex))
             else
-                self.houseLevelText:SetText(string.format("|cFF%sHouse|r |cFF%sLv %d|r |cFF%s%d/%d XP|r", dimHex, accentHex, level, dimHex, xp, xpForNextLevel))
+                self.houseLevelText:SetText(string.format("%s |cFF%sLv %d|r |cFF%s%d/%d XP|r", houseIcon, accentHex, level, dimHex, xp, xpForNextLevel))
             end
         else
             self.houseLevelText:SetText("")
@@ -151,7 +152,7 @@ function VE:CreateMainWindow()
     local padding = UI.panelPadding
 
     local headerSection = CreateFrame("Frame", nil, frame)
-    headerSection:SetHeight(54)
+    headerSection:SetHeight(70)
     headerSection:SetPoint("TOPLEFT", padding, -38)
     headerSection:SetPoint("TOPRIGHT", -padding, -38)
     frame.headerSection = headerSection
@@ -183,11 +184,63 @@ function VE:CreateMainWindow()
     progressBar:SetPoint("TOPRIGHT", 0, 0)
     frame.progressBar = progressBar
 
-    -- Stats row below progress bar (coupons + house level)
+    -- ========================================================================
+    -- ROW 1: Dropdown (left), House Level + XP (right) / Fetch Status (right)
+    -- ========================================================================
+    local dropdownRow = CreateFrame("Frame", nil, headerSection)
+    dropdownRow:SetHeight(20)
+    dropdownRow:SetPoint("TOPLEFT", progressBar, "BOTTOMLEFT", 0, -4)
+    dropdownRow:SetPoint("TOPRIGHT", progressBar, "BOTTOMRIGHT", 0, -4)
+
+    -- House icon (left side)
+    local houseIcon = dropdownRow:CreateTexture(nil, "ARTWORK")
+    houseIcon:SetSize(16, 16)
+    houseIcon:SetPoint("LEFT", 0, 0)
+    houseIcon:SetAtlas("housing-map-plot-player-house-highlight")
+    frame.houseIcon = houseIcon
+
+    -- House selector dropdown (after icon) - uses custom styled dropdown
+    local houseDropdown = VE.UI:CreateDropdown(dropdownRow, {
+        width = 140,
+        height = 20,
+        onSelect = function(key, data)
+            if VE.EndeavorTracker then
+                VE.EndeavorTracker:SelectHouse(key)
+            end
+        end,
+    })
+    houseDropdown:SetPoint("LEFT", houseIcon, "RIGHT", 4, 0)
+    frame.houseDropdown = houseDropdown
+
+    -- House Level display (right side) - shares space with fetch status
+    -- Note: houseLevelText uses inline color codes, so we don't register it with HeaderText
+    local houseLevelText = dropdownRow:CreateFontString(nil, "OVERLAY")
+    houseLevelText:SetPoint("LEFT", houseDropdown, "RIGHT", 8, 0)
+    houseLevelText:SetPoint("RIGHT", 0, 0)
+    houseLevelText:SetJustifyH("LEFT")
+    VE.Theme.ApplyFont(houseLevelText, C, "small")
+    houseLevelText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
+    houseLevelText:SetText("")
+    frame.houseLevelText = houseLevelText
+
+    -- Fetch status text (right side) - replaces house level when loading
+    local fetchStatusText = dropdownRow:CreateFontString(nil, "OVERLAY")
+    fetchStatusText:SetPoint("LEFT", houseDropdown, "RIGHT", 8, 0)
+    fetchStatusText:SetPoint("RIGHT", 0, 0)
+    fetchStatusText:SetJustifyH("LEFT")
+    VE.Theme.ApplyFont(fetchStatusText, C, "small")
+    fetchStatusText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
+    fetchStatusText._colorType = "text_dim"
+    VE.Theme:Register(fetchStatusText, "HeaderText")
+    frame.fetchStatusText = fetchStatusText
+
+    -- ========================================================================
+    -- ROW 2: Coupons (left), Contribution (right)
+    -- ========================================================================
     local statsRow = CreateFrame("Frame", nil, headerSection)
     statsRow:SetHeight(16)
-    statsRow:SetPoint("TOPLEFT", progressBar, "BOTTOMLEFT", 0, -4)
-    statsRow:SetPoint("TOPRIGHT", progressBar, "BOTTOMRIGHT", 0, -4)
+    statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 0, -4)
+    statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", 0, -4)
 
     -- Coupons icon (left side)
     local couponsIcon = statsRow:CreateTexture(nil, "ARTWORK")
@@ -204,9 +257,49 @@ function VE:CreateMainWindow()
     VE.Theme:Register(couponsText, "HeaderText")
     frame.couponsText = couponsText
 
-    -- Character contribution label (after coupons)
+    -- House XP from tasks (after coupons)
+    local houseXpIcon = statsRow:CreateTexture(nil, "ARTWORK")
+    houseXpIcon:SetSize(14, 14)
+    houseXpIcon:SetPoint("LEFT", couponsText, "RIGHT", 12, 0)
+    houseXpIcon:SetAtlas("house-reward-increase-arrows")
+    houseXpIcon:SetRotation(math.pi / 2) -- 90 degrees counter-clockwise
+    frame.houseXpIcon = houseXpIcon
+
+    local houseXpText = statsRow:CreateFontString(nil, "OVERLAY")
+    houseXpText:SetPoint("LEFT", houseXpIcon, "RIGHT", 4, 0)
+    VE.Theme.ApplyFont(houseXpText, C, "small")
+    houseXpText:SetTextColor(C.endeavor.r, C.endeavor.g, C.endeavor.b)
+    houseXpText._colorType = "endeavor"
+    VE.Theme:Register(houseXpText, "HeaderText")
+    frame.houseXpText = houseXpText
+
+    -- Tooltip hover area for house XP
+    local houseXpHover = CreateFrame("Frame", nil, statsRow)
+    houseXpHover:SetPoint("LEFT", houseXpIcon, "LEFT", -2, 0)
+    houseXpHover:SetPoint("RIGHT", houseXpText, "RIGHT", 2, 0)
+    houseXpHover:SetPoint("TOP", houseXpIcon, "TOP", 0, 2)
+    houseXpHover:SetPoint("BOTTOM", houseXpIcon, "BOTTOM", 0, -2)
+    houseXpHover:EnableMouse(true)
+    houseXpHover:SetScript("OnEnter", function(self)
+        local colors = VE.Constants:GetThemeColors()
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("This is a guess!", colors.accent.r, colors.accent.g, colors.accent.b)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("House XP Earned", 1, 1, 1)
+        GameTooltip:AddLine("Estimated total from completed tasks.", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Formula: factor = 0.96 - 0.10 * n", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("n=2: x0.76, n=3: x0.66, n=4: x0.56...", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Base 50: 50 -> 38 -> 25 -> 14 -> 10", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    houseXpHover:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    -- Character contribution label (right side)
     local xpLabel = statsRow:CreateFontString(nil, "OVERLAY")
-    xpLabel:SetPoint("LEFT", couponsText, "RIGHT", 16, 0)
+    xpLabel:SetPoint("RIGHT", -40, 0)
     VE.Theme.ApplyFont(xpLabel, C, "small")
     xpLabel:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     xpLabel:SetText("Contribution:")
@@ -223,15 +316,132 @@ function VE:CreateMainWindow()
     VE.Theme:Register(xpValue, "HeaderText")
     frame.xpValue = xpValue
 
-    -- House Level display (right side of stats row)
-    -- Note: houseLevelText uses inline color codes, so we don't register it with HeaderText
-    -- Its colors are updated in UpdateHousingDisplay() using current theme colors
-    local houseLevelText = statsRow:CreateFontString(nil, "OVERLAY")
-    houseLevelText:SetPoint("RIGHT", 0, 0)
-    VE.Theme.ApplyFont(houseLevelText, C, "small")
-    houseLevelText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
-    houseLevelText:SetText("")
-    frame.houseLevelText = houseLevelText
+    -- Update house dropdown when house list changes
+    function frame:UpdateHouseDropdown(houseList, selectedIndex)
+        if houseList and #houseList > 0 then
+            -- Build items for the dropdown
+            local items = {}
+            for i, houseInfo in ipairs(houseList) do
+                table.insert(items, {
+                    key = i,
+                    label = houseInfo.houseName or ("House " .. i),
+                })
+            end
+            self.houseDropdown:SetItems(items)
+
+            -- Set selected house
+            local selectedHouse = houseList[selectedIndex or 1]
+            local houseName = selectedHouse and selectedHouse.houseName or "Select House"
+            self.houseDropdown:SetSelected(selectedIndex or 1, { label = houseName })
+        else
+            self.houseDropdown:SetItems({})
+            self.houseDropdown:SetSelected(nil, { label = "No houses" })
+        end
+    end
+
+    -- Combined status update (status + timestamp)
+    -- Fetch status text replaces house level display on row 1
+    function frame:UpdateFetchStatus(status)
+        if not status then
+            status = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus or { state = "pending" }
+        end
+        local colors = VE.Constants.Colors
+        local timestamp = VE.EndeavorTracker and VE.EndeavorTracker.activityLogLastUpdated
+        local timeStr = timestamp and date("%H:%M:%S", timestamp) or ""
+
+        -- Cancel any pending fade timer
+        if self.fetchStatusFadeTimer then
+            self.fetchStatusFadeTimer:Cancel()
+            self.fetchStatusFadeTimer = nil
+        end
+
+        -- Reset alpha
+        self.fetchStatusText:SetAlpha(1)
+
+        -- Check if we actually have data (tasks or activity log)
+        local hasData = false
+        local state = VE.Store:GetState()
+        if state and state.tasks and #state.tasks > 0 then
+            hasData = true
+        elseif timestamp then
+            hasData = true
+        end
+
+        local text = ""
+
+        if status.state == "loaded" and hasData then
+            local successColor = string.format("%02x%02x%02x", colors.success.r*255, colors.success.g*255, colors.success.b*255)
+            text = "|cFF" .. successColor .. "Data loaded"
+            if timeStr ~= "" then
+                text = text .. " - " .. timeStr
+            end
+            text = text .. "|r"
+
+            -- Fade out after 0.5 seconds, then show house level
+            self.fetchStatusFadeTimer = C_Timer.NewTimer(0.5, function()
+                if self.fetchStatusText then
+                    UIFrameFadeOut(self.fetchStatusText, 1, 1, 0)
+                    -- After fade completes, show house level
+                    C_Timer.After(1, function()
+                        self.fetchStatusText:SetText("")
+                        self.houseLevelText:Show()
+                        self:UpdateHousingDisplay()
+                    end)
+                end
+            end)
+        elseif status.state == "loaded" or status.state == "fetching" then
+            -- Status says loaded but no data yet, or actively fetching
+            text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255) .. "Fetching data...|r"
+        elseif status.state == "retrying" then
+            local remaining = status.nextRetry and (status.nextRetry - time()) or 60
+            if remaining < 0 then remaining = 0 end
+            text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255)
+            text = text .. "Retry " .. (status.attempt or 1) .. "/3 in " .. remaining .. "s|r"
+        else
+            text = "|cFF" .. string.format("%02x%02x%02x", colors.text_dim.r*255, colors.text_dim.g*255, colors.text_dim.b*255) .. "Waiting for data...|r"
+        end
+
+        -- Show fetch status, hide house level (they share the same space)
+        if text ~= "" then
+            self.fetchStatusText:SetText(text)
+            self.houseLevelText:Hide()
+        end
+    end
+
+    -- Listen for fetch status changes
+    VE.EventBus:Register("VE_FETCH_STATUS_CHANGED", function(status)
+        if frame.UpdateFetchStatus then
+            frame:UpdateFetchStatus(status)
+        end
+    end)
+
+    -- Listen for activity log updates (refresh status and contribution)
+    VE.EventBus:Register("VE_ACTIVITY_LOG_UPDATED", function(payload)
+        if frame.UpdateFetchStatus then
+            frame:UpdateFetchStatus()
+        end
+        -- Refresh contribution display (calculated from activity log)
+        if frame.UpdateHeader then
+            frame:UpdateHeader()
+        end
+    end)
+
+    -- Listen for house list updates
+    VE.EventBus:Register("VE_HOUSE_LIST_UPDATED", function(payload)
+        if frame.UpdateHouseDropdown and payload then
+            frame:UpdateHouseDropdown(payload.houseList, payload.selectedIndex)
+        end
+    end)
+
+    -- Ticker to update countdown while retrying
+    frame.fetchStatusTicker = C_Timer.NewTicker(1, function()
+        if frame:IsShown() and VE.EndeavorTracker then
+            local status = VE.EndeavorTracker.fetchStatus
+            if status and status.state == "retrying" then
+                frame:UpdateFetchStatus(status)
+            end
+        end
+    end)
 
     -- Request fresh data on show
     frame:HookScript("OnShow", function()
@@ -243,6 +453,12 @@ function VE:CreateMainWindow()
         -- Request endeavor data for immediate refresh
         if VE.EndeavorTracker then
             VE.EndeavorTracker:FetchEndeavorData()
+        end
+        -- Update status displays
+        frame:UpdateFetchStatus()
+        -- Update house dropdown
+        if VE.EndeavorTracker then
+            frame:UpdateHouseDropdown(VE.EndeavorTracker:GetHouseList(), VE.EndeavorTracker:GetSelectedHouseIndex())
         end
     end)
 
@@ -288,7 +504,17 @@ function VE:CreateMainWindow()
                 print(string.format("|cFF2aa198[VE Contrib]|r Total: %.1f from %d entries", playerContribution, entryCount))
             end
         end
+        -- Contribution = endeavor progress (from activity log)
         self.xpValue:SetText(string.format("%.1f", playerContribution))
+
+        -- House XP = reward from completed tasks (with DR calculation)
+        local houseXpEarned = 0
+        if state.tasks and VE.EndeavorTracker then
+            for _, task in ipairs(state.tasks) do
+                houseXpEarned = houseXpEarned + VE.EndeavorTracker:GetTaskTotalHouseXPEarned(task)
+            end
+        end
+        self.houseXpText:SetText(tostring(houseXpEarned))
     end
 
     -- ========================================================================
@@ -296,7 +522,7 @@ function VE:CreateMainWindow()
     -- ========================================================================
 
     local content = CreateFrame("Frame", nil, frame)
-    content:SetPoint("TOPLEFT", 0, -92)
+    content:SetPoint("TOPLEFT", 0, -UI.headerContentOffset)
     content:SetPoint("BOTTOMRIGHT", 0, 0)
     frame.content = content
 

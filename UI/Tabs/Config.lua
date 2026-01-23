@@ -29,28 +29,94 @@ function VE.UI.Tabs:CreateConfig(parent)
     header:SetPoint("TOPRIGHT", -padding, -padding)
 
     -- ========================================================================
-    -- SETTINGS OPTIONS
+    -- SCROLLABLE SETTINGS CONTAINER
     -- ========================================================================
 
-    local settingsPanel = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    settingsPanel:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
-    settingsPanel:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -8)
-    settingsPanel:SetHeight(282)
-    settingsPanel:SetBackdrop({
+    local scrollContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
+    scrollContainer:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+    scrollContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
+    scrollContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = nil,
     })
-    container.settingsPanel = settingsPanel
+    container.scrollContainer = scrollContainer
 
     -- Apply panel colors
     local function ApplyPanelColors()
         local C = GetColors()
         local opacity = VE.Store.state.config.bgOpacity or 0.9
-        settingsPanel:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3 * opacity)
+        scrollContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3 * opacity)
     end
     ApplyPanelColors()
 
+    local scrollFrame, scrollContent = VE.UI:CreateScrollFrame(scrollContainer)
+    scrollFrame:SetPoint("TOPLEFT", 0, -2)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -2, 2)
+    container.scrollContent = scrollContent
+
+    -- Settings panel is now inside scroll content
+    local settingsPanel = scrollContent
+    container.settingsPanel = settingsPanel
+
     local yOffset = -12
+
+    -- ========================================================================
+    -- DISCORD LINK (at top)
+    -- ========================================================================
+
+    local DISCORD_INVITE = "https://discord.gg/RWZaxJaHFP"
+
+    local discordRow = CreateFrame("Frame", nil, settingsPanel)
+    discordRow:SetHeight(24)
+    discordRow:SetPoint("TOPLEFT", 12, yOffset)
+    discordRow:SetPoint("TOPRIGHT", -12, yOffset)
+
+    local discordColors = GetColors()
+
+    -- Discord icon
+    local discordIcon = discordRow:CreateTexture(nil, "ARTWORK")
+    discordIcon:SetSize(20, 20)
+    discordIcon:SetPoint("LEFT", 0, 0)
+    discordIcon:SetTexture("Interface\\AddOns\\VamoosesEndeavors\\Textures\\discord")
+    discordRow.icon = discordIcon
+
+    -- Discord link edit box (copyable, auto-selects on click)
+    local discordEditBox = CreateFrame("EditBox", nil, discordRow, "BackdropTemplate")
+    discordEditBox:SetSize(160, 22)
+    discordEditBox:SetPoint("LEFT", discordIcon, "RIGHT", 6, 0)
+    discordEditBox:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    discordEditBox:SetBackdropColor(discordColors.panel.r, discordColors.panel.g, discordColors.panel.b, 0.8)
+    discordEditBox:SetBackdropBorderColor(0.35, 0.40, 0.98, 0.6)  -- Discord blurple border
+    discordEditBox:SetFontObject("GameFontHighlight")
+    discordEditBox:SetText(DISCORD_INVITE)
+    discordEditBox:SetAutoFocus(false)
+    discordEditBox:SetTextInsets(8, 8, 0, 0)
+    discordEditBox:SetScript("OnEditFocusGained", function(self)
+        self:HighlightText()
+    end)
+    discordEditBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    discordEditBox:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+    end)
+    discordRow.editBox = discordEditBox
+    container.discordEditBox = discordEditBox
+
+    -- Copy hint
+    local discordHint = discordRow:CreateFontString(nil, "OVERLAY")
+    discordHint:SetPoint("LEFT", discordEditBox, "RIGHT", 6, 0)
+    VE.Theme.ApplyFont(discordHint, discordColors, "small")
+    discordHint:SetText("Ctrl+C")
+    discordHint:SetTextColor(discordColors.text_dim.r, discordColors.text_dim.g, discordColors.text_dim.b, 0.7)
+    discordRow.hint = discordHint
+    container.discordHint = discordHint
+
+    yOffset = yOffset - 32
 
     -- Track checkbox rows for theme updates
     container.checkboxRows = {}
@@ -400,45 +466,164 @@ function VE.UI.Tabs:CreateConfig(parent)
     container.opacityLabel = opacityLabel
     container.opacityValue = opacityValue
 
-    yOffset = yOffset - 32
+    yOffset = yOffset - 36
 
     -- ========================================================================
-    -- VERSION INFO
+    -- HOUSE XP FORMULA INFO
+    -- ========================================================================
+
+    local formulaHeader = VE.UI:CreateSectionHeader(settingsPanel, "House XP Formula (Guess!)")
+    formulaHeader:SetPoint("TOPLEFT", 12, yOffset)
+    formulaHeader:SetPoint("TOPRIGHT", -12, yOffset)
+    container.formulaHeader = formulaHeader
+
+    yOffset = yOffset - 20
+
+    local formulaC = GetColors()
+
+    -- Formula explanation
+    local formulaText = settingsPanel:CreateFontString(nil, "OVERLAY")
+    formulaText:SetPoint("TOPLEFT", 12, yOffset)
+    formulaText:SetJustifyH("LEFT")
+    VE.Theme.ApplyFont(formulaText, formulaC, "small")
+    formulaText:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    formulaText:SetText("Progressive DR: factor = 0.96 - 0.10 * n")
+    container.formulaText = formulaText
+
+    yOffset = yOffset - 14
+
+    local formulaExample = settingsPanel:CreateFontString(nil, "OVERLAY")
+    formulaExample:SetPoint("TOPLEFT", 12, yOffset)
+    formulaExample:SetJustifyH("LEFT")
+    VE.Theme.ApplyFont(formulaExample, formulaC, "small")
+    formulaExample:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    formulaExample:SetText("n=2: x0.76, n=3: x0.66, n=4: x0.56...")
+    container.formulaExample = formulaExample
+
+    yOffset = yOffset - 18
+
+    -- Base values header
+    local baseHeader = settingsPanel:CreateFontString(nil, "OVERLAY")
+    baseHeader:SetPoint("TOPLEFT", 12, yOffset)
+    VE.Theme.ApplyFont(baseHeader, formulaC, "small")
+    baseHeader:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
+    baseHeader:SetText("Known Base Values:")
+    container.baseHeader = baseHeader
+
+    yOffset = yOffset - 14
+
+    -- Base 50 tasks
+    local base50 = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base50:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base50, formulaC, "small")
+    base50:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base50:SetText("|cFFb58900Base 50:|r Weekly, Good Neighbor,")
+    container.base50 = base50
+
+    yOffset = yOffset - 12
+
+    local base50b = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base50b:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base50b, formulaC, "small")
+    base50b:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base50b:SetText("Daily, Froststone, War Creche, Lumber")
+    container.base50b = base50b
+
+    yOffset = yOffset - 14
+
+    -- Base 25 tasks
+    local base25 = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base25:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base25, formulaC, "small")
+    base25:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base25:SetText("|cFF859900Base 25:|r Pet Battle, Hoard, Scrolls,")
+    container.base25 = base25
+
+    yOffset = yOffset - 12
+
+    local base25b = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base25b:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base25b, formulaC, "small")
+    base25b:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base25b:SetText("Vault Doors, Kill Rares, Gather, Creatures")
+    container.base25b = base25b
+
+    yOffset = yOffset - 14
+
+    -- Base 150 tasks
+    local base150 = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base150:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base150, formulaC, "small")
+    base150:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base150:SetText("|cFFdc322fBase 150:|r Profession Rare")
+    container.base150 = base150
+
+    yOffset = yOffset - 14
+
+    -- Base 10 tasks
+    local base10 = settingsPanel:CreateFontString(nil, "OVERLAY")
+    base10:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(base10, formulaC, "small")
+    base10:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    base10:SetText("|cFF6c71c4Base 10:|r Skyriding, Delves, M+, Raids")
+    container.base10 = base10
+
+    yOffset = yOffset - 18
+
+    -- Example progression
+    local progHeader = settingsPanel:CreateFontString(nil, "OVERLAY")
+    progHeader:SetPoint("TOPLEFT", 12, yOffset)
+    VE.Theme.ApplyFont(progHeader, formulaC, "small")
+    progHeader:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
+    progHeader:SetText("Example (Base 50):")
+    container.progHeader = progHeader
+
+    yOffset = yOffset - 14
+
+    local progExample = settingsPanel:CreateFontString(nil, "OVERLAY")
+    progExample:SetPoint("TOPLEFT", 20, yOffset)
+    VE.Theme.ApplyFont(progExample, formulaC, "small")
+    progExample:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    progExample:SetText("50 -> 38 -> 25 -> 14 -> 10 (floor)")
+    container.progExample = progExample
+
+    yOffset = yOffset - 24
+
+    -- ========================================================================
+    -- VERSION INFO (inside scroll content)
     -- ========================================================================
 
     local C = GetColors()
-    local versionInfo = container:CreateFontString(nil, "OVERLAY")
-    versionInfo:SetPoint("BOTTOMLEFT", padding, padding)
+    local versionInfo = settingsPanel:CreateFontString(nil, "OVERLAY")
+    versionInfo:SetPoint("TOPLEFT", 12, yOffset)
     VE.Theme.ApplyFont(versionInfo, C, "small")
     local version = C_AddOns.GetAddOnMetadata("VamoosesEndeavors", "Version") or "Dev"
-    versionInfo:SetText("Version " .. version)
+    versionInfo:SetText("Version " .. version .. " | C_NeighborhoodInitiative API")
     versionInfo:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     container.versionInfo = versionInfo
 
-    -- API Info
-    local apiInfo = container:CreateFontString(nil, "OVERLAY")
-    apiInfo:SetPoint("BOTTOMRIGHT", -padding, padding)
-    VE.Theme.ApplyFont(apiInfo, C, "small")
-    apiInfo:SetText("Using C_NeighborhoodInitiative API")
-    apiInfo:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
-    container.apiInfo = apiInfo
+    yOffset = yOffset - 14
 
     -- Font credit
-    local fontCredit = container:CreateFontString(nil, "OVERLAY")
-    fontCredit:SetPoint("BOTTOM", 0, padding + 14)
+    local fontCredit = settingsPanel:CreateFontString(nil, "OVERLAY")
+    fontCredit:SetPoint("TOPLEFT", 12, yOffset)
     VE.Theme.ApplyFont(fontCredit, C, "small")
     fontCredit:SetText("Expressway font by Typodermic Fonts")
     fontCredit:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     container.fontCredit = fontCredit
 
+    -- Set scroll content height
+    yOffset = yOffset - 20
+    scrollContent:SetHeight(math.abs(yOffset))
+
     -- Listen for theme updates to refresh colors
     VE.EventBus:Register("VE_THEME_UPDATE", function()
         ApplyPanelColors()
         local colors = GetColors()
-        container.versionInfo:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-        VE.Theme.ApplyFont(container.versionInfo, colors, "small")
-        container.apiInfo:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-        VE.Theme.ApplyFont(container.apiInfo, colors, "small")
+        if container.versionInfo then
+            container.versionInfo:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.versionInfo, colors, "small")
+        end
         if container.fontCredit then
             container.fontCredit:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
             VE.Theme.ApplyFont(container.fontCredit, colors, "small")
@@ -477,6 +662,58 @@ function VE.UI.Tabs:CreateConfig(parent)
         if container.opacityValue then
             container.opacityValue:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
             VE.Theme.ApplyFont(container.opacityValue, colors)
+        end
+        if container.discordEditBox then
+            container.discordEditBox:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
+        end
+        if container.discordHint then
+            container.discordHint:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, 0.7)
+            VE.Theme.ApplyFont(container.discordHint, colors, "small")
+        end
+        -- Formula section theme updates
+        if container.formulaText then
+            container.formulaText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.formulaText, colors, "small")
+        end
+        if container.formulaExample then
+            container.formulaExample:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.formulaExample, colors, "small")
+        end
+        if container.baseHeader then
+            container.baseHeader:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+            VE.Theme.ApplyFont(container.baseHeader, colors, "small")
+        end
+        if container.base50 then
+            container.base50:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base50, colors, "small")
+        end
+        if container.base50b then
+            container.base50b:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base50b, colors, "small")
+        end
+        if container.base25 then
+            container.base25:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base25, colors, "small")
+        end
+        if container.base25b then
+            container.base25b:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base25b, colors, "small")
+        end
+        if container.base150 then
+            container.base150:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base150, colors, "small")
+        end
+        if container.base10 then
+            container.base10:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.base10, colors, "small")
+        end
+        if container.progHeader then
+            container.progHeader:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+            VE.Theme.ApplyFont(container.progHeader, colors, "small")
+        end
+        if container.progExample then
+            container.progExample:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.progExample, colors, "small")
         end
     end)
 

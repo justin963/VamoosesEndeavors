@@ -31,6 +31,22 @@ function Tracker:Initialize()
     -- Track activity log loading state
     self.activityLogLoaded = false
 
+    -- Track fetch status for UI display
+    self.fetchStatus = {
+        state = "pending",  -- "pending", "fetching", "loaded", "retrying"
+        attempt = 0,
+        lastAttempt = nil,
+        nextRetry = nil,
+    }
+
+    -- Track pending retry timer (to cancel on new fetch)
+    self.pendingRetryTimer = nil
+
+    -- Track house list for house selector
+    self.houseList = {}
+    self.selectedHouseIndex = 1
+    self.houseListLoaded = false -- Flag to track if we've received house list
+
     self.frame:SetScript("OnEvent", function(frame, event, ...)
         self:OnEvent(event, ...)
     end)
@@ -45,6 +61,28 @@ function Tracker:Initialize()
     if VE.Store:GetState().config.debug then
         print("|cFF2aa198[VE Tracker]|r Initialized with C_NeighborhoodInitiative API")
     end
+
+    -- Auto-refresh every 60 seconds to keep data current
+    self.refreshTicker = C_Timer.NewTicker(60, function()
+        if C_NeighborhoodInitiative and C_NeighborhoodInitiative.IsInitiativeEnabled
+           and C_NeighborhoodInitiative.IsInitiativeEnabled() then
+            -- Use selected house's neighborhood if available (respects dropdown selection)
+            local neighborhoodGUID = nil
+            if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
+                neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
+            end
+            -- Fallback to current/active neighborhood
+            if not neighborhoodGUID then
+                neighborhoodGUID = (C_Housing and C_Housing.GetCurrentNeighborhoodGUID and C_Housing.GetCurrentNeighborhoodGUID())
+                                or (C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood())
+            end
+            if neighborhoodGUID then
+                C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+                C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+                self:RequestActivityLog()
+            end
+        end
+    end)
 end
 
 -- ============================================================================
@@ -55,11 +93,17 @@ function Tracker:OnEvent(event, ...)
     local debug = VE.Store:GetState().config.debug
 
     if event == "PLAYER_ENTERING_WORLD" then
-        -- Delay initial fetch to let housing systems initialize
+        -- Initialize housing system first (like Blizzard's dashboard does)
+        -- This triggers PLAYER_HOUSE_LIST_UPDATED which handles the actual data fetch
+        -- DON'T call FetchEndeavorData here - wait for PLAYER_HOUSE_LIST_UPDATED to set neighborhood context first
         C_Timer.After(2, function()
-            self:FetchEndeavorData()
-            -- Also request activity log so leaderboard/activity tabs have data ready
-            self:RequestActivityLog()
+            if C_Housing and C_Housing.GetPlayerOwnedHouses then
+                if debug then
+                    print("|cFF2aa198[VE Tracker]|r Requesting player house list to initialize housing system...")
+                end
+                -- This will trigger PLAYER_HOUSE_LIST_UPDATED which does the proper API sequence
+                C_Housing.GetPlayerOwnedHouses()
+            end
         end)
 
     elseif event == "NEIGHBORHOOD_INITIATIVE_UPDATED" then
@@ -85,13 +129,77 @@ function Tracker:OnEvent(event, ...)
             print("|cFF2aa198[VE Tracker]|r Activity log updated")
         end
         self.activityLogLoaded = true
+        self.activityLogLastUpdated = time()
         -- Notify UI to refresh activity/leaderboard tabs
-        VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED")
+        VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
 
     elseif event == "PLAYER_HOUSE_LIST_UPDATED" then
-        -- House list changed, might need to refresh
+        -- House list loaded - extract neighborhood and set viewing context (CRITICAL for API to work)
+        local houseInfoList = ...
         if debug then
-            print("|cFF2aa198[VE Tracker]|r House list updated")
+            print("|cFF2aa198[VE Tracker]|r House list updated with " .. (houseInfoList and #houseInfoList or 0) .. " houses")
+        end
+
+        -- Store house list for UI dropdown
+        self.houseList = houseInfoList or {}
+        self.houseListLoaded = true
+        local selectedIndex = 1
+
+        -- Get neighborhood GUID (required for SetViewingNeighborhood)
+        -- Use same priority as Blizzard: current neighborhood > active neighborhood > first house
+        local neighborhoodGUID = nil
+
+        -- Priority 1: Current neighborhood (if player is physically in one)
+        local currentNeighborhood = C_Housing and C_Housing.GetCurrentNeighborhoodGUID and C_Housing.GetCurrentNeighborhoodGUID()
+        if currentNeighborhood and houseInfoList then
+            for i, houseInfo in ipairs(houseInfoList) do
+                if houseInfo.neighborhoodGUID == currentNeighborhood then
+                    neighborhoodGUID = currentNeighborhood
+                    selectedIndex = i
+                    break
+                end
+            end
+        end
+
+        -- Priority 2: Active neighborhood (if we have a house there)
+        if not neighborhoodGUID then
+            local activeNeighborhood = C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+            if activeNeighborhood and houseInfoList then
+                for i, houseInfo in ipairs(houseInfoList) do
+                    if houseInfo.neighborhoodGUID == activeNeighborhood then
+                        neighborhoodGUID = activeNeighborhood
+                        selectedIndex = i
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Priority 3: First house in the list (fallback)
+        if not neighborhoodGUID and houseInfoList and #houseInfoList > 0 then
+            neighborhoodGUID = houseInfoList[1].neighborhoodGUID
+            selectedIndex = 1
+        end
+
+        self.selectedHouseIndex = selectedIndex
+
+        -- Notify UI about house list update
+        VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = selectedIndex })
+
+        if neighborhoodGUID and C_NeighborhoodInitiative then
+            if debug then
+                print("|cFF2aa198[VE Tracker]|r Setting active/viewing neighborhood: " .. tostring(neighborhoodGUID))
+            end
+            -- SetActiveNeighborhood makes this the "active" neighborhood for endeavors (required for activity log)
+            if C_NeighborhoodInitiative.SetActiveNeighborhood then
+                C_NeighborhoodInitiative.SetActiveNeighborhood(neighborhoodGUID)
+            end
+            -- SetViewingNeighborhood sets the context for API calls
+            C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+            C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+            self:RequestActivityLog()
+        elseif debug then
+            print("|cFFdc322f[VE Tracker]|r No neighborhood GUID found - cannot load initiative data")
         end
 
     elseif event == "QUEST_LOG_UPDATE" or event == "CRITERIA_UPDATE" then
@@ -111,12 +219,30 @@ end
 -- DATA FETCHING
 -- ============================================================================
 
-function Tracker:FetchEndeavorData(skipRequest)
+function Tracker:UpdateFetchStatus(state, attempt, nextRetryTime)
+    self.fetchStatus.state = state
+    self.fetchStatus.attempt = attempt or self.fetchStatus.attempt
+    self.fetchStatus.lastAttempt = time()
+    self.fetchStatus.nextRetry = nextRetryTime
+    VE.EventBus:Trigger("VE_FETCH_STATUS_CHANGED", self.fetchStatus)
+end
+
+function Tracker:FetchEndeavorData(skipRequest, attempt)
     local debug = VE.Store:GetState().config.debug
+    attempt = attempt or 0 -- 0 = manual/event-triggered, 1+ = auto-retry attempts
+
+    -- Cancel any pending retry timer (prevents stale retries from interfering)
+    if self.pendingRetryTimer then
+        self.pendingRetryTimer:Cancel()
+        self.pendingRetryTimer = nil
+    end
 
     if debug then
-        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data...")
+        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data..." .. (attempt > 0 and " (attempt " .. attempt .. ")" or ""))
     end
+
+    -- Update fetch status
+    self:UpdateFetchStatus(attempt > 0 and "retrying" or "fetching", attempt, nil)
 
     -- Check if the API exists
     if not C_NeighborhoodInitiative then
@@ -157,6 +283,18 @@ function Tracker:FetchEndeavorData(skipRequest)
 
     -- Only request fresh data if not triggered by the event (prevents infinite loop)
     if not skipRequest then
+        -- Ensure neighborhood context is set before requesting (may have been lost)
+        local neighborhoodGUID = nil
+        if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
+            neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
+        end
+        if not neighborhoodGUID then
+            neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
+                               C_NeighborhoodInitiative.GetActiveNeighborhood()
+        end
+        if neighborhoodGUID then
+            C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+        end
         C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
     end
 
@@ -167,9 +305,38 @@ function Tracker:FetchEndeavorData(skipRequest)
         if debug then
             print("|cFF2aa198[VE Tracker]|r Initiative data not loaded yet, waiting...")
         end
-        -- Data will come via NEIGHBORHOOD_INITIATIVE_UPDATED event
+        -- Retry up to 3 times at 10s intervals, then rely on 60s auto-refresh
+        -- Only retry if we have house list loaded (ensures SetViewingNeighborhood was called)
+        if self.houseListLoaded and attempt >= 0 and attempt < 3 then
+            local nextRetry = time() + 10
+            self:UpdateFetchStatus("retrying", attempt + 1, nextRetry)
+            if debug then
+                print("|cFF2aa198[VE Tracker]|r Scheduling retry " .. (attempt + 1) .. "/3 in 10s...")
+            end
+            -- Store timer so it can be cancelled if user changes house
+            self.pendingRetryTimer = C_Timer.NewTimer(10, function()
+                self.pendingRetryTimer = nil
+                -- Use selected house's neighborhood for retry
+                local neighborhoodGUID = nil
+                if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
+                    neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
+                end
+                if not neighborhoodGUID then
+                    neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
+                                       C_NeighborhoodInitiative.GetActiveNeighborhood()
+                end
+                if neighborhoodGUID then
+                    C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+                    C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+                    self:RequestActivityLog()
+                end
+            end)
+        end
         return
     end
+
+    -- Data loaded successfully
+    self:UpdateFetchStatus("loaded", attempt, nil)
 
     if initiativeInfo.initiativeID == 0 then
         if debug then
@@ -326,8 +493,14 @@ function Tracker:GetTaskCouponReward(task)
                 -- Currency ID 3363 is Community Coupons
                 if reward.currencyID == 3363 then
                     local baseReward = reward.totalRewardAmount or 0
+
+                    -- Non-repeatable tasks: no DR, just return base
+                    if not task.isRepeatable then
+                        return baseReward
+                    end
+
+                    -- Repeatable tasks: apply DR based on completions
                     local timesCompleted = task.timesCompleted or 0
-                    -- Actual reward = base - timesCompleted (minimum 1)
                     local actualReward = math.max(1, baseReward - timesCompleted)
                     return actualReward
                 end
@@ -336,6 +509,108 @@ function Tracker:GetTaskCouponReward(task)
     end
 
     return 0
+end
+
+-- House XP diminishing returns: Progressive DR that increases each completion
+-- Formula: factor_n = 0.96 - 0.10 * n where n is completion number (2+)
+-- Progression from base 50: 50 → 38 (×0.76) → 25 (×0.66) → 14 (×0.56) → 10 (floor)
+-- Floor of 10 XP minimum per completion
+local HOUSE_XP_MIN_FLOOR = 10
+
+-- Known base values by task name pattern (from fresh house data)
+local TASK_BASE_VALUES = {
+    -- Base 50 tasks
+    ["Weekly"] = 50, ["Good Neighbor"] = 50, ["Daily Quests"] = 50,
+    ["Froststone"] = 50, ["War Creche"] = 50, ["Lumber"] = 50,
+    -- Base 25 tasks
+    ["Pet Battle"] = 25, ["Forbidden Hoard"] = 25, ["Sealed Scrolls"] = 25,
+    ["Vault Doors"] = 25, ["Kill Rares"] = 25, ["Gather"] = 25, ["Creatures"] = 25,
+    -- Special tasks
+    ["Profession Rare"] = 150,
+    -- Base 10 tasks
+    ["Skyriding"] = 10, ["Delves"] = 10, ["Mythic"] = 10, ["Raids"] = 10,
+    ["Honor"] = 10, ["World Quests"] = 10,
+}
+
+-- Try to find base value from task name using known patterns
+local function GetTaskBaseValue(taskName)
+    if not taskName then return nil end
+    local name = taskName:lower()
+    for pattern, base in pairs(TASK_BASE_VALUES) do
+        if name:find(pattern:lower()) then
+            return base
+        end
+    end
+    return nil
+end
+
+-- Debug dump of task XP data for analysis
+function Tracker:DumpTaskXPData()
+    local state = VE.Store:GetState()
+    if not state or not state.tasks then
+        print("|cFFdc322f[VE XP Dump]|r No tasks loaded")
+        return
+    end
+    print("|cFF2aa198[VE XP Dump]|r === Task XP Data ===")
+    local totalEarned = 0
+    for _, task in ipairs(state.tasks) do
+        local completions = task.timesCompleted or 0
+        if task.completed then completions = completions + 1 end
+        local earned = self:GetTaskTotalHouseXPEarned(task)
+        local base = GetTaskBaseValue(task.name) or (task.progressContributionAmount or task.points or 0)
+        local repLabel = task.isRepeatable and "REP" or "ONE"
+        print(string.format("  [%s] %s: base=%d, current=%d, comps=%d, earned=%d",
+            repLabel,
+            task.name or "?",
+            base,
+            task.progressContributionAmount or task.points or 0,
+            completions,
+            earned))
+        totalEarned = totalEarned + earned
+    end
+    print("|cFF2aa198[VE XP Dump]|r Total earned: " .. totalEarned)
+    print("|cFF2aa198[VE XP Dump]|r === End ===")
+end
+
+-- Calculate total house XP earned from task completions
+-- Repeatable tasks: sum of base + progressive DR-reduced subsequent completions
+-- Non-repeatable tasks: base value once only (regardless of timesCompleted)
+function Tracker:GetTaskTotalHouseXPEarned(task)
+    local completions = task.timesCompleted or 0
+    if task.completed then
+        completions = completions + 1
+    end
+
+    if completions == 0 then
+        return 0
+    end
+
+    -- Get base value from known table or use current reward value
+    local base = GetTaskBaseValue(task.name)
+    if not base then
+        base = task.progressContributionAmount or task.points or 0
+    end
+
+    -- Non-repeatable tasks: count base value once only
+    if not task.isRepeatable then
+        return base
+    end
+
+    -- Repeatable tasks: sum with progressive DR
+    -- Formula: factor_n = 0.96 - 0.10 * n (applied to previous reward)
+    -- Progression: 50 → 38 (×0.76) → 25 (×0.66) → 14 (×0.56) → 10 (floor)
+    local total = base  -- First completion gets full base
+    local reward = base
+
+    for n = 2, completions do
+        local factor = 0.96 - 0.10 * n  -- n=2: 0.76, n=3: 0.66, n=4: 0.56...
+        factor = math.max(factor, 0.10) -- Don't go below 10% factor
+        reward = math.floor(reward * factor)
+        reward = math.max(reward, HOUSE_XP_MIN_FLOOR)
+        total = total + reward
+    end
+
+    return math.floor(total + 0.5)
 end
 
 -- Refresh tracked tasks status
@@ -571,4 +846,103 @@ end
 
 function Tracker:IsActivityLogLoaded()
     return self.activityLogLoaded
+end
+
+-- Manual refresh - ensures correct API call order for all data
+function Tracker:RefreshAll()
+    local debug = VE.Store:GetState().config.debug
+
+    -- Cancel any pending retry timer
+    if self.pendingRetryTimer then
+        self.pendingRetryTimer:Cancel()
+        self.pendingRetryTimer = nil
+    end
+
+    -- Update status
+    self:UpdateFetchStatus("fetching", 0, nil)
+
+    if not C_NeighborhoodInitiative then
+        if debug then
+            print("|cFFdc322f[VE Tracker]|r RefreshAll: C_NeighborhoodInitiative not available")
+        end
+        return
+    end
+
+    -- Get neighborhood GUID from selected house or fallback
+    local neighborhoodGUID = nil
+    if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
+        neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
+    end
+    if not neighborhoodGUID then
+        neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
+                           C_NeighborhoodInitiative.GetActiveNeighborhood()
+    end
+
+    if neighborhoodGUID then
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r RefreshAll: Setting neighborhood " .. tostring(neighborhoodGUID))
+        end
+        -- Step 1: Set viewing neighborhood context
+        C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+        -- Step 2: Request initiative info (triggers NEIGHBORHOOD_INITIATIVE_UPDATED)
+        C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+        -- Step 3: Request activity log (triggers INITIATIVE_ACTIVITY_LOG_UPDATED)
+        self:RequestActivityLog()
+    elseif debug then
+        print("|cFFdc322f[VE Tracker]|r RefreshAll: No neighborhood GUID available")
+    end
+end
+
+-- ============================================================================
+-- HOUSE SELECTION
+-- ============================================================================
+
+function Tracker:SelectHouse(index)
+    if not self.houseList or #self.houseList == 0 then return end
+    if index < 1 or index > #self.houseList then return end
+
+    local houseInfo = self.houseList[index]
+    if not houseInfo or not houseInfo.neighborhoodGUID then return end
+
+    -- Cancel any pending retry from previous selection
+    if self.pendingRetryTimer then
+        self.pendingRetryTimer:Cancel()
+        self.pendingRetryTimer = nil
+    end
+
+    self.selectedHouseIndex = index
+    local debug = VE.Store:GetState().config.debug
+
+    if debug then
+        print("|cFF2aa198[VE Tracker]|r Selecting house: " .. (houseInfo.houseName or "Unknown") .. " in neighborhood " .. tostring(houseInfo.neighborhoodGUID))
+    end
+
+    -- Update status to show we're fetching
+    self:UpdateFetchStatus("fetching", 0, nil)
+
+    -- Set active neighborhood (enables tasks for this neighborhood) and viewing context
+    if C_NeighborhoodInitiative then
+        -- SetActiveNeighborhood makes this the "active" neighborhood for endeavors
+        if C_NeighborhoodInitiative.SetActiveNeighborhood then
+            C_NeighborhoodInitiative.SetActiveNeighborhood(houseInfo.neighborhoodGUID)
+        end
+        C_NeighborhoodInitiative.SetViewingNeighborhood(houseInfo.neighborhoodGUID)
+        C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+        self:RequestActivityLog()
+
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Called SetActiveNeighborhood, SetViewingNeighborhood, and RequestNeighborhoodInitiativeInfo")
+        end
+    end
+
+    -- Notify UI
+    VE.EventBus:Trigger("VE_HOUSE_SELECTED", { index = index, houseInfo = houseInfo })
+end
+
+function Tracker:GetHouseList()
+    return self.houseList or {}
+end
+
+function Tracker:GetSelectedHouseIndex()
+    return self.selectedHouseIndex or 1
 end

@@ -127,16 +127,16 @@ end
 
 -- Get colors for current theme
 function VE.Constants:GetThemeColors()
-    local theme = "solarizeddark"
+    local theme = "housingtheme"
     -- Read from Store state (immediate) rather than VE_DB (delayed save)
     if VE.Store and VE.Store.state and VE.Store.state.config then
-        theme = VE.Store.state.config.theme or "solarizeddark"
+        theme = VE.Store.state.config.theme or "housingtheme"
     elseif VE_DB and VE_DB.config and VE_DB.config.theme then
         theme = VE_DB.config.theme
     end
 
-    local themeName = self.ThemeNames and self.ThemeNames[theme] or "SolarizedDark"
-    return VE.Colors.Schemes[themeName] or VE.Colors.Schemes.SolarizedDark
+    local themeName = self.ThemeNames and self.ThemeNames[theme] or "HousingTheme"
+    return VE.Colors.Schemes[themeName] or VE.Colors.Schemes.HousingTheme
 end
 
 -- Apply current theme to VE.Constants.Colors
@@ -169,11 +169,11 @@ end
 function VE.Constants:GetCurrentTheme()
     -- Read from Store state (immediate) rather than VE_DB (delayed save)
     if VE.Store and VE.Store.state and VE.Store.state.config then
-        return VE.Store.state.config.theme or "solarizeddark"
+        return VE.Store.state.config.theme or "housingtheme"
     elseif VE_DB and VE_DB.config and VE_DB.config.theme then
         return VE_DB.config.theme
     end
-    return "solarizeddark"
+    return "housingtheme"
 end
 
 -- ============================================================================
@@ -184,6 +184,7 @@ VE.Constants.UI = {
     -- Main window
     mainWidth = 338,
     mainHeight = 480,
+    headerContentOffset = 120, -- Height of header area (title bar + tabs + header section); used for minimized height and content offset
 
     -- Row sizing
     rowHeight = 22,
