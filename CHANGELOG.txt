@@ -6,6 +6,17 @@ Version 1.5.0 (Released January 2026)
 --------------------------------------------------------------------------------
 
 NEW FEATURES:
+- Multi-House Support: House dropdown lets you switch between owned houses
+  - Automatically selects current/active neighborhood on login
+  - House selection persists across sessions
+- House Level Display: Shows "Lv X" with XP progress (current/next level)
+  - Visual indicator of house progression
+- Fetch Status Display: Shows data loading state in header
+  - "Fetching..." / "Retrying..." / "Data loaded" states
+  - "Last updated" timestamp for activity log
+- Leaderboard "My Total" Row: Shows combined contributions across all your alts
+  - Tracks all characters automatically
+  - Shows character count "(X chars)"
 - House XP Earned: Shows estimated total House XP from completed endeavors
   - Progressive diminishing returns formula: factor = 0.96 - 0.10 * n
   - Known base values for each task type (50, 25, 150, 10)
@@ -17,17 +28,25 @@ NEW FEATURES:
 - Debug Command: /ve xpdump shows task XP data for analysis
 
 BUG FIXES:
+- Automatic Data Loading: Endeavor data now loads on login without opening
+  Blizzard's Housing Dashboard (SetViewingNeighborhood API fix)
 - Non-repeatable tasks now show base coupon reward (no DR applied)
 - Coupon badge no longer cut off on right side
 
 UI IMPROVEMENTS:
+- House dropdown in header for multi-house selection
+- House level badge next to house dropdown
+- Fetch status indicator with loading/error states
 - House XP Formula section in Config tab with base value reference
 - Coupon badge slightly taller for better text fit
 
 TECHNICAL:
+- SetViewingNeighborhood() called before RequestNeighborhoodInitiativeInfo()
+- Multi-house selection via C_Housing.GetPlayerOwnedHouses()
 - GetTaskTotalHouseXPEarned() calculates XP with progressive DR
 - TASK_BASE_VALUES lookup table for known base values by task pattern
 - Sort state saved to VE_DB.ui.taskSort
+- myCharacters tracking for cross-alt leaderboard aggregation
 
 --------------------------------------------------------------------------------
 
