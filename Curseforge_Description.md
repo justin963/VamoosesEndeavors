@@ -8,7 +8,7 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ## **What's New in v1.5.0 - Multi-House & XP Tracking**
 
-- **Multi-House Support** - Switch between owned houses with dropdown selector
+- **Multi-House Support** - Switch between owned houses to view and complete endeavor tasks for each
 - **House Level Display** - See house level and XP progress toward next level
 - **House XP Earned** - Track total estimated XP from completed endeavors
 - **Task Sorting** - Sort by XP or Coupons (ascending/descending)
@@ -59,7 +59,7 @@ See your overall endeavor season progress at a glance.
 ### **House Level & Coupons**
 Track your housing progress in the header area.
 
-- **Multi-House Dropdown** - Switch between all your owned houses
+- **Multi-House Dropdown** - Switch between all your owned houses and track endeavor tasks for each separately
 - **House Level** - Current level with XP progress to next level
 - **Community Coupons** - Total coupons displayed in title bar
 - **Fetch Status** - See loading state and last updated time
