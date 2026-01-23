@@ -13,7 +13,7 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 - **House XP Earned** - Track total estimated XP from completed endeavors
 - **Task Sorting** - Sort by XP or Coupons (ascending/descending)
 - **Leaderboard My Total** - Combined contributions across all your alts
-- **Automatic Data Loading** - Endeavors load on login (no dashboard required)
+- **Automatic Data Loading** - Data loading issues resolved! Endeavors now load automatically on login and stay up to date (no more opening Blizzard's Housing Dashboard)
 - **Fetch Status Display** - See loading state and last updated timestamp
 
 *See CHANGELOG.txt for complete version history*
