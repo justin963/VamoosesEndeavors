@@ -1,0 +1,28 @@
+## Interface: 120000
+## Title: Vamoose's Endeavors
+## Notes: Track Housing Endeavor progress across all your characters
+## Author: Vamoose
+## Version: 1.4.0
+## SavedVariables: VE_DB
+## IconTexture: Interface\Icons\Garrison_Building_Storehouse
+
+# Core
+Core/SchemeConstants.lua
+Core/Constants.lua
+Core/EventBus.lua
+Core/Store.lua
+Core/Init.lua
+
+# Modules
+Modules/EndeavorTracker.lua
+Modules/HousingTracker.lua
+
+# UI
+UI/ThemeEngine.lua
+UI/Framework.lua
+UI/MainFrame.lua
+UI/Minimap.lua
+UI/Tabs/Endeavors.lua
+UI/Tabs/Leaderboard.lua
+UI/Tabs/Activity.lua
+UI/Tabs/Config.lua

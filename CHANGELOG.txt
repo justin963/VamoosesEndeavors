@@ -1,0 +1,189 @@
+================================================================================
+Vamoose's Endeavors - Changelog
+================================================================================
+
+Version 1.4.0 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Housing Theme: New theme mimicking native WoW Housing Dashboard aesthetic
+  - Uses Blizzard Atlas textures for authentic look
+  - Dark charcoal background with bronze/wood trim
+  - Blizzard Gold accents and header text
+  - 3-part tab rendering (left cap, center, right cap) for native tab appearance
+
+UI IMPROVEMENTS:
+- Equal-width tab buttons that fill the window width (4px padding)
+- Renamed tabs: "Leaderboard" → "Rankings", "Settings" → "Config"
+- Removed bottom highlight line from tabs for cleaner look
+- Added padding above season name header
+
+TECHNICAL:
+- Atlas texture support in ThemeEngine with vertical flip for Blizzard tab textures
+- Tab width calculated dynamically based on window width
+- SetTexCoord(0, 1, 1, 0) for proper tab orientation
+
+--------------------------------------------------------------------------------
+
+Version 1.3.0
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- 10 Theme Options: Solarized Dark/Light, Gruvbox Dark/Light, Everforest Dark/Light,
+  Everforest Access, Kanagawa Dark/Light, and Accessibility High Contrast
+- Theme Toggle Button: "T" button in title bar cycles through all themes
+- Live Theme Switching: All UI elements update instantly when changing themes
+- Font Size Adjustment: Scale all fonts from -4 to +8 in Settings
+- UI Scale: Resize entire window from 80% to 140%
+- Background Transparency: Adjust opacity from 30% to 100%
+- Font Family Selection: Choose from Arial Narrow, Friz Quadrata, Skurri,
+  Morpheus, or Expressway
+
+BUG FIXES:
+- House level now displays correctly on addon open (was showing stale data)
+- Fixed house selection to prefer current/active neighborhood
+
+UI IMPROVEMENTS:
+- Consistent font sizing across all tabs (Activity, Leaderboard, Endeavors)
+- Settings controls aligned with dropdown edges for cleaner layout
+- Task rows use consistent body font sizing
+
+TECHNICAL:
+- Smart house selection matching Blizzard's dashboard logic
+- Background opacity applied via theme skinners
+- Font family stored in SavedVariables
+
+--------------------------------------------------------------------------------
+
+Version 1.2.0
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- 5 Theme Options: Solarized Dark, Solarized Light, Gruvbox Dark, Gruvbox Light,
+  and Everforest
+- Theme Toggle Button: Quick access "T" button in title bar cycles through themes
+- Live Theme Switching: All UI elements update instantly when changing themes
+
+UI IMPROVEMENTS:
+- Borderless title bar for cleaner appearance
+- Centered title text
+- Improved button spacing and alignment
+- Refresh button properly themed across all color schemes
+- Theme button shows accent color indicator
+
+TECHNICAL:
+- Theme Engine with widget registry for live updates
+- ThemeDisplayNames for user-friendly tooltip labels
+- All buttons and panels now respond to theme changes
+
+--------------------------------------------------------------------------------
+
+Version 1.1.1
+--------------------------------------------------------------------------------
+
+BUG FIXES:
+- Activity log now loads automatically on login (fixes inconsistent leaderboard
+  data across characters)
+- Previously, activity data only loaded when opening Activity/Leaderboard tabs
+
+--------------------------------------------------------------------------------
+
+Version 1.1.0
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Leaderboard Tab: See contribution rankings for all neighborhood members
+  - Gold/Silver/Bronze colors for top 3 contributors
+  - Current player highlighted in cyan
+- Activity Tab: Track recent neighborhood activity
+  - Top 5 Tasks: Most completed tasks by count
+  - Activity Feed: Recent completions sorted by time (newest first)
+  - Shows player name, task name, XP earned, and time ago
+
+UI IMPROVEMENTS:
+- Coupons display moved to title bar (always visible)
+- Title text left-aligned after Refresh button
+- Loading state for activity data ("Loading activity data...")
+- Auto-refresh when activity log updates from server
+
+TECHNICAL:
+- Added VE_ACTIVITY_LOG_UPDATED event for reactive UI updates
+- Activity log loaded flag to distinguish loading vs empty states
+- Hover states properly maintain player highlight colors
+
+--------------------------------------------------------------------------------
+
+Version 1.0.2
+--------------------------------------------------------------------------------
+
+IMPROVEMENTS:
+- Enhanced /ve tasks debug command: now searches for lumber, harvest, rare tasks
+- Improved debug output: shows progressContributionAmount and all currency rewards
+
+VERIFIED BEHAVIOR:
+- Coupon rewards: correctly displays "next reward" value (base - timesCompleted)
+- XP/Points: API progressContributionAmount shows diminished value (next reward)
+- Both values represent what you'll earn on next completion, not base values
+
+--------------------------------------------------------------------------------
+
+Version 1.0.1
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Community Coupons Display: Shows total coupons in header (currency ID 3363)
+- Per-Task Coupon Rewards: Cyan badge shows coupon reward for each task
+- Auto-Refresh: UI updates automatically when coupons are earned
+
+UI IMPROVEMENTS:
+- Reduced window width from 388px to 338px for cleaner layout
+- Reorganized header: season name/days on row 1, full-width progress bar below
+- Total Coupons moved to Endeavor Tasks header row (right-aligned)
+- Changed frame strata to MEDIUM (no longer always on top)
+
+TECHNICAL:
+- Added GetTaskCouponReward() to query quest rewards via rewardQuestID
+- Registered CURRENCY_DISPLAY_UPDATE event for live updates
+
+--------------------------------------------------------------------------------
+
+Version 1.0.0
+--------------------------------------------------------------------------------
+
+INITIAL RELEASE
+
+NEW FEATURES:
+- Endeavor Task List: View all housing endeavor tasks from C_NeighborhoodInitiative API
+- Completion Tracking: Green/gray indicators show task completion status
+- Repeatable Task Icons: Green refresh icon (UI-RefreshButton) for repeatable tasks
+- Progress Display: Shows X/Y progress for multi-step tasks (e.g., "47/100")
+- Point Values: Gold badge showing endeavor points awarded per task
+- Progress Bar: Visual season progress with diamond milestone markers
+- Season Info: Shows endeavor name and days remaining
+- Solarized Theme: Dark and Light theme support with toggle
+- Minimap Button: Quick access to open/close the window
+- Config Tab: Settings for debug mode, minimap button visibility, theme
+
+ARCHITECTURE:
+- Redux-lite state management (Store with actions/reducers)
+- Event bus for component communication
+- Modular UI framework with reusable components
+- C_NeighborhoodInitiative API integration
+- Placeholder data fallback when API unavailable
+
+COMMANDS:
+- /ve - Toggle main window
+- /ve debug - Toggle debug mode
+- /ve refresh - Force refresh endeavor data
+- /ve theme - Toggle dark/light theme
+- /ve dump - Show current state
+
+---
+
+Future Plans:
+- Multi-character progress tracking
+- Character comparison grid
+- Activity log display
+- Task tracking (pin to objectives)
+
+================================================================================
