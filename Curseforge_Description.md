@@ -6,13 +6,15 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.4.0 - Housing Theme**
+## **What's New in v1.5.0 - Multi-House & XP Tracking**
 
-- **Housing Theme** - New native WoW aesthetic using Blizzard Atlas textures
-- **Authentic Look** - Dark charcoal background with bronze/wood trim
-- **Native Tab Style** - 3-part tab rendering matching WoW's UI
-- **Equal-Width Tabs** - Tabs now fill window width evenly
-- **Renamed Tabs** - "Leaderboard" → "Rankings", "Settings" → "Config"
+- **Multi-House Support** - Switch between owned houses with dropdown selector
+- **House Level Display** - See house level and XP progress toward next level
+- **House XP Earned** - Track total estimated XP from completed endeavors
+- **Task Sorting** - Sort by XP or Coupons (ascending/descending)
+- **Leaderboard My Total** - Combined contributions across all your alts
+- **Automatic Data Loading** - Endeavors load on login (no dashboard required)
+- **Fetch Status Display** - See loading state and last updated timestamp
 
 *See CHANGELOG.txt for complete version history*
 
@@ -28,14 +30,16 @@ Track all housing endeavor tasks from the Neighborhood Initiative system.
 - **Progress Display** - Shows X/Y progress for multi-step tasks
 - **Point Values** - Gold badge showing endeavor XP per task
 - **Coupon Rewards** - Cyan badge showing coupon reward (with diminishing returns)
-- **Task Sorting** - Incomplete tasks shown first, then by priority
+- **Task Sorting** - Click column headers to sort by XP or Coupons
+- **House XP Earned** - Estimated total XP with progressive DR formula
 
 ### **Contribution Leaderboard**
 See who's contributing the most to your neighborhood!
 
 - **Rankings** - Gold/Silver/Bronze colors for top 3 contributors
 - **Total Contribution** - XP contributed by each member
-- **Player Highlight** - Your character highlighted in cyan
+- **My Total Row** - Combined contributions across all your alts
+- **Player Highlight** - All your characters highlighted in accent color
 
 ### **Activity Feed**
 Track recent neighborhood activity in real-time.
@@ -55,8 +59,10 @@ See your overall endeavor season progress at a glance.
 ### **House Level & Coupons**
 Track your housing progress in the header area.
 
-- **House Level** - Current level with XP progress
+- **Multi-House Dropdown** - Switch between all your owned houses
+- **House Level** - Current level with XP progress to next level
 - **Community Coupons** - Total coupons displayed in title bar
+- **Fetch Status** - See loading state and last updated time
 - **Auto-Refresh** - Updates when you earn rewards
 
 ### **Full Customization**
@@ -115,10 +121,7 @@ Type **`/ve`** to open the main window.
 ## **Commands**
 
 - `/ve` - Toggle main window
-- `/ve debug` - Toggle debug mode
-- `/ve refresh` - Force refresh endeavor data
-- `/ve theme` - Toggle theme
-- `/ve dump` - Show current state (debug)
+
 
 ---
 
@@ -131,5 +134,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Game Version:** 12.0.0+ (Midnight)
