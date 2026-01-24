@@ -88,12 +88,15 @@ function Tracker:OnEvent(event, ...)
         if debug then
             print("|cFF2aa198[VE Tracker]|r NEIGHBORHOOD_INITIATIVE_UPDATED")
         end
-        -- Pass true to skip requesting data again (we already have it from the event)
-        self:FetchEndeavorData(true)
-        -- Refresh UI to update task display
-        if VE.RefreshUI then
-            VE:RefreshUI()
-        end
+        -- Small delay to let API data settle after neighborhood change
+        C_Timer.After(0.2, function()
+            -- Pass true to skip requesting data again (we already have it from the event)
+            self:FetchEndeavorData(true)
+            -- Refresh UI to update task display
+            if VE.RefreshUI then
+                VE:RefreshUI()
+            end
+        end)
 
     elseif event == "INITIATIVE_TASKS_TRACKED_UPDATED" or
            event == "INITIATIVE_TASKS_TRACKED_LIST_CHANGED" then
@@ -329,6 +332,50 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
 
     -- Data loaded successfully
     self:UpdateFetchStatus("loaded", attempt, nil)
+
+    -- Get the active endeavor neighborhood
+    local activeGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+    local dataGUID = initiativeInfo.neighborhoodGUID
+
+    -- Sync dropdown if Blizzard's dashboard changed the viewing neighborhood
+    if dataGUID and self.houseList then
+        local selectedGUID = self.selectedHouseIndex and self.houseList[self.selectedHouseIndex]
+                             and self.houseList[self.selectedHouseIndex].neighborhoodGUID
+        if dataGUID ~= selectedGUID then
+            -- Find which house matches the data we received and sync dropdown
+            for i, houseInfo in ipairs(self.houseList) do
+                if houseInfo.neighborhoodGUID == dataGUID then
+                    if debug then
+                        print("|cFF2aa198[VE Tracker]|r Syncing dropdown to match Blizzard's selection: house " .. i)
+                    end
+                    self.selectedHouseIndex = i
+                    VE_DB = VE_DB or {}
+                    VE_DB.selectedHouseIndex = i
+                    VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = i })
+                    break
+                end
+            end
+        end
+    end
+
+    -- ALWAYS check: If viewing a non-active neighborhood, clear data and return
+    if dataGUID and activeGUID and dataGUID ~= activeGUID then
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Viewing non-active neighborhood (" .. tostring(dataGUID) .. " != " .. tostring(activeGUID) .. "), clearing data")
+        end
+        self:UpdateFetchStatus("loaded", 0, nil)  -- Mark as loaded so UI shows button, not "fetching"
+        VE.Store:Dispatch("SET_ENDEAVOR_INFO", {
+            seasonName = "Not Active Endeavor",
+            daysRemaining = 0,
+            currentProgress = 0,
+            maxProgress = 0,
+            milestones = {},
+        })
+        VE.Store:Dispatch("SET_TASKS", { tasks = {} })
+        self.activityLogLoaded = false
+        VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = nil })
+        return
+    end
 
     if initiativeInfo.initiativeID == 0 then
         if debug then
@@ -909,26 +956,49 @@ function Tracker:SelectHouse(index)
     -- Update status to show we're fetching
     self:UpdateFetchStatus("fetching", 0, nil)
 
-    -- Set active neighborhood (enables tasks for this neighborhood) and viewing context
+    -- Clear old data immediately when switching houses
+    VE.Store:Dispatch("SET_TASKS", { tasks = {} })
+    self.activityLogLoaded = false
+    VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = nil })
+
+    -- Only set viewing context (not active) - user must click "Set as Active" button
     if C_NeighborhoodInitiative then
-        -- SetActiveNeighborhood makes this the "active" neighborhood for endeavors
-        if C_NeighborhoodInitiative.SetActiveNeighborhood then
-            C_NeighborhoodInitiative.SetActiveNeighborhood(houseInfo.neighborhoodGUID)
-        end
         C_NeighborhoodInitiative.SetViewingNeighborhood(houseInfo.neighborhoodGUID)
         C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
         self:RequestActivityLog()
 
         if debug then
-            print("|cFF2aa198[VE Tracker]|r Called SetActiveNeighborhood, SetViewingNeighborhood, and RequestNeighborhoodInitiativeInfo")
+            print("|cFF2aa198[VE Tracker]|r Called SetViewingNeighborhood and RequestNeighborhoodInitiativeInfo (not active yet)")
         end
-
-        -- Notify user in chat
-        print("|cFF2aa198[VE]|r Switched to |cFFffd700" .. (houseInfo.houseName or "Unknown") .. "|r. |cFFdc322fNOTE:|r All progress and XP from tasks will now apply to this house.")
     end
 
     -- Notify UI
     VE.EventBus:Trigger("VE_HOUSE_SELECTED", { index = index, houseInfo = houseInfo })
+end
+
+-- Set the currently selected house as the active endeavor
+function Tracker:SetAsActiveEndeavor()
+    if not self.selectedHouseIndex or not self.houseList then return end
+    local houseInfo = self.houseList[self.selectedHouseIndex]
+    if not houseInfo or not houseInfo.neighborhoodGUID then return end
+
+    local debug = VE.Store:GetState().config.debug
+
+    if C_NeighborhoodInitiative and C_NeighborhoodInitiative.SetActiveNeighborhood then
+        C_NeighborhoodInitiative.SetActiveNeighborhood(houseInfo.neighborhoodGUID)
+
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Set active neighborhood: " .. tostring(houseInfo.neighborhoodGUID))
+        end
+
+        -- Notify user in chat
+        print("|cFF2aa198[VE]|r Active Endeavor switched to |cFFffd700" .. (houseInfo.houseName or "Unknown") .. "|r. |cFFcb4b16All task progress/XP now applies to this house.|r")
+
+        -- Refresh data now that it's active
+        self:UpdateFetchStatus("fetching", 0, nil)
+        C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+        self:RequestActivityLog()
+    end
 end
 
 function Tracker:GetHouseList()

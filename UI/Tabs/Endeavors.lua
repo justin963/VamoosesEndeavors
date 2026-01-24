@@ -179,7 +179,7 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             local colors = GetColors()
             if not self.emptyText then
                 self.emptyText = self.scrollContent:CreateFontString(nil, "OVERLAY")
-                self.emptyText:SetPoint("CENTER", self.scrollContent, "CENTER", 0, 0)
+                self.emptyText:SetPoint("CENTER", self.scrollContent, "CENTER", 0, 20)
             end
             VE.Theme.ApplyFont(self.emptyText, colors)
 
@@ -187,10 +187,39 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             local fetchStatus = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus
             local isFetching = fetchStatus and (fetchStatus.state == "fetching" or fetchStatus.state == "retrying" or fetchStatus.state == "pending")
 
-            if isFetching then
+            if isFetching or self.setActiveClicked then
                 self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+                -- Hide button while fetching or after clicking set active
+                if self.setActiveButton then
+                    self.setActiveButton:Hide()
+                end
             else
-                self.emptyText:SetText("No endeavor tasks found.\nOpen the Housing Dashboard to sync data.")
+                self.emptyText:SetText("No endeavor tasks found.\nThis house is not set as your active endeavor.")
+
+                -- Create "Set as Active" button if needed
+                if not self.setActiveButton then
+                    self.setActiveButton = CreateFrame("Button", nil, self.scrollContent, "UIPanelButtonTemplate")
+                    self.setActiveButton:SetSize(120, 24)
+                    self.setActiveButton:SetPoint("TOP", self.emptyText, "BOTTOM", 0, -12)
+                    self.setActiveButton:SetText("Set as Active")
+                    self.setActiveButton:SetScript("OnClick", function()
+                        self.setActiveClicked = true  -- Prevent button from re-showing
+                        if self.setActiveButton then
+                            self.setActiveButton:Hide()
+                        end
+                        self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+                        local tracker = VE.EndeavorTracker
+                        if tracker then
+                            tracker:SetAsActiveEndeavor()
+                        end
+                    end)
+                end
+                -- Style button text
+                local fs = self.setActiveButton:GetFontString()
+                if fs then
+                    VE.Theme.ApplyFont(fs, colors)
+                end
+                self.setActiveButton:Show()
             end
 
             self.emptyText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
@@ -201,6 +230,9 @@ function VE.UI.Tabs:CreateEndeavors(parent)
 
         if self.emptyText then
             self.emptyText:Hide()
+        end
+        if self.setActiveButton then
+            self.setActiveButton:Hide()
         end
 
         -- Apply sorting if active (completed tasks always at bottom)
@@ -268,6 +300,11 @@ function VE.UI.Tabs:CreateEndeavors(parent)
         if container:IsShown() then
             container:Update()
         end
+    end)
+
+    -- Reset setActiveClicked flag when house selection changes
+    VE.EventBus:Register("VE_HOUSE_SELECTED", function()
+        container.setActiveClicked = false
     end)
 
     return container

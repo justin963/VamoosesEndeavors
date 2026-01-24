@@ -6,13 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.1 - Stability & UI Polish**
+## **What's New in v1.5.2 - Multi-House UX Improvements**
 
-- **House Level Always Visible** - Status messages now show below dropdown, XP stays visible
-- **House Selection Persists** - Your selected house saves across sessions and reloads
-- **Fixed Dropdown Stability** - Selection no longer resets when house list updates
-- **Memory & Performance** - Fixed memory leak, removed aggressive auto-refresh
-- **Improved Coupon Display** - Shows base reward with note about diminishing returns
+- **Matches Blizzard Dashboard** - House dropdown now behaves like the Housing Dashboard
+- **View Without Switching** - Changing houses only changes view, not your active endeavor
+- **Set as Active Button** - Click to set a house as your active endeavor destination
+- **Seamless Experience** - All three tabs (Tasks, Rankings, Activity) show consistent state
 
 *See CHANGELOG.txt for complete version history*
 
@@ -139,5 +138,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.1
+**Version:** 1.5.2
 **Game Version:** 12.0.0+ (Midnight)

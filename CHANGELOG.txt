@@ -2,6 +2,21 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.2 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Multi-house dropdown now matches Blizzard's Housing Dashboard behavior
+  - Switching houses only changes viewing context (not active endeavor)
+  - "Set as Active" button appears when viewing non-active house
+  - Click button to set house as your active endeavor destination
+
+BUG FIXES:
+- Fixed Endeavors tab showing "Fetching..." instead of Set as Active button
+- Fixed setActiveClicked flag not resetting on house switch
+
+--------------------------------------------------------------------------------
+
 Version 1.5.1 (Released January 2026)
 --------------------------------------------------------------------------------
 

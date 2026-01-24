@@ -268,10 +268,35 @@ function VE.UI.Tabs:CreateActivity(parent)
             VE.Theme.ApplyFont(self.emptyText, colors)
             self.emptyText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
 
-            if not VE.EndeavorTracker:IsActivityLogLoaded() then
+            -- Check fetch status to show appropriate message
+            local fetchStatus = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus
+            local isFetching = fetchStatus and (fetchStatus.state == "fetching" or fetchStatus.state == "retrying" or fetchStatus.state == "pending")
+
+            if isFetching then
                 self.emptyText:SetText("Loading activity data...")
+                if self.setActiveButton then
+                    self.setActiveButton:Hide()
+                end
             else
-                self.emptyText:SetText("No activity data available.\nVisit your neighborhood to sync.")
+                self.emptyText:SetText("No activity data available.\nThis house is not set as your active endeavor.")
+                -- Create "Set as Active" button if needed
+                if not self.setActiveButton then
+                    self.setActiveButton = CreateFrame("Button", nil, self.scrollContent, "UIPanelButtonTemplate")
+                    self.setActiveButton:SetSize(120, 24)
+                    self.setActiveButton:SetPoint("TOP", self.emptyText, "BOTTOM", 0, -12)
+                    self.setActiveButton:SetText("Set as Active")
+                    self.setActiveButton:SetScript("OnClick", function()
+                        local tracker = VE.EndeavorTracker
+                        if tracker then
+                            tracker:SetAsActiveEndeavor()
+                        end
+                    end)
+                end
+                local fs = self.setActiveButton:GetFontString()
+                if fs then
+                    VE.Theme.ApplyFont(fs, colors)
+                end
+                self.setActiveButton:Show()
             end
             self.emptyText:Show()
             self.scrollContent:SetHeight(100)
@@ -280,6 +305,9 @@ function VE.UI.Tabs:CreateActivity(parent)
 
         if self.emptyText then
             self.emptyText:Hide()
+        end
+        if self.setActiveButton then
+            self.setActiveButton:Hide()
         end
 
         -- ====================================================================
