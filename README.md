@@ -6,12 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.1 - Stability & Persistence**
+## **What's New in v1.5.1 - Stability & UI Polish**
 
-- **House Selection Persists** - Your selected house now saves across sessions and reloads
-- **Fixed UI Flickering** - XP/house level no longer hides during background refreshes
-- **Memory & Performance** - Fixed memory leak from countdown ticker, removed aggressive auto-refresh
-- **Dropdown Stability** - Selection no longer resets when house list updates
+- **House Level Always Visible** - Status messages now show below dropdown, XP stays visible
+- **House Selection Persists** - Your selected house saves across sessions and reloads
+- **Fixed Dropdown Stability** - Selection no longer resets when house list updates
+- **Memory & Performance** - Fixed memory leak, removed aggressive auto-refresh
 - **Improved Coupon Display** - Shows base reward with note about diminishing returns
 
 *See CHANGELOG.txt for complete version history*

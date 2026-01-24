@@ -223,15 +223,15 @@ function VE:CreateMainWindow()
     houseLevelText:SetText("")
     frame.houseLevelText = houseLevelText
 
-    -- Fetch status text (right side) - replaces house level when loading
+    -- Fetch status text (below dropdown) - shows loading/retry status
     local fetchStatusText = dropdownRow:CreateFontString(nil, "OVERLAY")
-    fetchStatusText:SetPoint("LEFT", houseDropdown, "RIGHT", 8, 0)
-    fetchStatusText:SetPoint("RIGHT", 0, 0)
+    fetchStatusText:SetPoint("TOPLEFT", houseDropdown, "BOTTOMLEFT", 0, -2)
     fetchStatusText:SetJustifyH("LEFT")
     VE.Theme.ApplyFont(fetchStatusText, C, "small")
     fetchStatusText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     fetchStatusText._colorType = "text_dim"
     VE.Theme:Register(fetchStatusText, "HeaderText")
+    fetchStatusText:Hide()  -- Hidden by default, shown when needed
     frame.fetchStatusText = fetchStatusText
 
     -- ========================================================================
@@ -337,8 +337,7 @@ function VE:CreateMainWindow()
         end
     end
 
-    -- Combined status update (status + timestamp)
-    -- Fetch status text replaces house level display on row 1
+    -- Fetch status display (shows below dropdown, independent of house level)
     function frame:UpdateFetchStatus(status)
         if not status then
             status = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus or { state = "pending" }
@@ -353,7 +352,7 @@ function VE:CreateMainWindow()
             self.fetchStatusFadeTimer = nil
         end
 
-        -- Reset alpha
+        -- Reset alpha and ensure visible for new messages
         self.fetchStatusText:SetAlpha(1)
 
         -- Check if we actually have data (tasks or activity log)
@@ -375,15 +374,13 @@ function VE:CreateMainWindow()
             end
             text = text .. "|r"
 
-            -- Fade out after 0.5 seconds, then show house level
+            -- Fade out after 0.5 seconds, then hide
             self.fetchStatusFadeTimer = C_Timer.NewTimer(0.5, function()
                 if self.fetchStatusText then
                     UIFrameFadeOut(self.fetchStatusText, 1, 1, 0)
-                    -- After fade completes, show house level
                     C_Timer.After(1, function()
                         self.fetchStatusText:SetText("")
-                        self.houseLevelText:Show()
-                        self:UpdateHousingDisplay()
+                        self.fetchStatusText:Hide()
                     end)
                 end
             end)
@@ -404,15 +401,13 @@ function VE:CreateMainWindow()
             end
         end
 
-        -- Show fetch status OR house level (they share the same space)
+        -- Show or hide fetch status text (house level is always visible now)
         if text ~= "" then
             self.fetchStatusText:SetText(text)
-            self.houseLevelText:Hide()
+            self.fetchStatusText:Show()
         else
-            -- No status to show - display house level instead
             self.fetchStatusText:SetText("")
-            self.houseLevelText:Show()
-            self:UpdateHousingDisplay()
+            self.fetchStatusText:Hide()
         end
     end
 

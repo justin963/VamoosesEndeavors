@@ -9,12 +9,12 @@ BUG FIXES:
 - Fixed memory leak: countdown ticker now stops when window is hidden
 - Fixed race condition with retry timer cleanup
 - Fixed dropdown selection resetting when house list updates
-- Fixed XP/house level display being hidden during background refreshes
 - Added GUID validation to prevent empty string API calls
 - Added type safety check for house level favor data
 - Added defensive nil check for character tracking
 
 IMPROVEMENTS:
+- Fetch status now displays below dropdown (house level always visible)
 - House selection now persists across sessions and reloads
 - Removed aggressive 60-second auto-refresh (data updates via events)
 - Coupon rewards now show base value with "(Decreases with completions)" note
