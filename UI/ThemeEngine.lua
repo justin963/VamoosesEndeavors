@@ -399,14 +399,7 @@ VE.Theme.Skinners = {
             f.minimizeIcon:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
             ApplyFont(f.minimizeIcon, c)
         end
-        if f.themeIcon then
-            f.themeIcon:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
-            ApplyFont(f.themeIcon, c)
-        end
-        if f.closeText then
-            f.closeText:SetTextColor(c.error.r, c.error.g, c.error.b)
-            ApplyFont(f.closeText, c)
-        end
+        -- themeIcon and closeIcon are atlas textures, no color update needed
     end,
 
     -- Tab Button skinner (Atlas-aware with 3-part left/center/right)

@@ -153,7 +153,7 @@ function Tracker:OnHouseLevelFavorUpdated(houseLevelFavor)
         return
     end
 
-    if not houseLevelFavor then
+    if not houseLevelFavor or type(houseLevelFavor) ~= "table" then
         VE.Store:Dispatch("SET_HOUSE_LEVEL", {
             level = 0,
             xp = 0,

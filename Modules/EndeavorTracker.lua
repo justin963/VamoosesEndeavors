@@ -44,7 +44,7 @@ function Tracker:Initialize()
 
     -- Track house list for house selector
     self.houseList = {}
-    self.selectedHouseIndex = 1
+    self.selectedHouseIndex = (VE_DB and VE_DB.selectedHouseIndex) or 1 -- Load saved selection
     self.houseListLoaded = false -- Flag to track if we've received house list
 
     self.frame:SetScript("OnEvent", function(frame, event, ...)
@@ -61,28 +61,6 @@ function Tracker:Initialize()
     if VE.Store:GetState().config.debug then
         print("|cFF2aa198[VE Tracker]|r Initialized with C_NeighborhoodInitiative API")
     end
-
-    -- Auto-refresh every 60 seconds to keep data current
-    self.refreshTicker = C_Timer.NewTicker(60, function()
-        if C_NeighborhoodInitiative and C_NeighborhoodInitiative.IsInitiativeEnabled
-           and C_NeighborhoodInitiative.IsInitiativeEnabled() then
-            -- Use selected house's neighborhood if available (respects dropdown selection)
-            local neighborhoodGUID = nil
-            if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
-                neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
-            end
-            -- Fallback to current/active neighborhood
-            if not neighborhoodGUID then
-                neighborhoodGUID = (C_Housing and C_Housing.GetCurrentNeighborhoodGUID and C_Housing.GetCurrentNeighborhoodGUID())
-                                or (C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood())
-            end
-            if neighborhoodGUID then
-                C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
-                C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
-                self:RequestActivityLog()
-            end
-        end
-    end)
 end
 
 -- ============================================================================
@@ -143,45 +121,56 @@ function Tracker:OnEvent(event, ...)
         -- Store house list for UI dropdown
         self.houseList = houseInfoList or {}
         self.houseListLoaded = true
-        local selectedIndex = 1
 
-        -- Get neighborhood GUID (required for SetViewingNeighborhood)
-        -- Use same priority as Blizzard: current neighborhood > active neighborhood > first house
+        -- Preserve user's dropdown selection if still valid
+        local selectedIndex = self.selectedHouseIndex
         local neighborhoodGUID = nil
 
-        -- Priority 1: Current neighborhood (if player is physically in one)
-        local currentNeighborhood = C_Housing and C_Housing.GetCurrentNeighborhoodGUID and C_Housing.GetCurrentNeighborhoodGUID()
-        if currentNeighborhood and houseInfoList then
-            for i, houseInfo in ipairs(houseInfoList) do
-                if houseInfo.neighborhoodGUID == currentNeighborhood then
-                    neighborhoodGUID = currentNeighborhood
-                    selectedIndex = i
-                    break
-                end
-            end
-        end
+        -- Check if current selection is still valid (index within bounds and house exists)
+        if selectedIndex and houseInfoList and selectedIndex >= 1 and selectedIndex <= #houseInfoList then
+            neighborhoodGUID = houseInfoList[selectedIndex].neighborhoodGUID
+            -- Selection still valid, keep it
+        else
+            -- Need to auto-select: use same priority as Blizzard
+            selectedIndex = 1
 
-        -- Priority 2: Active neighborhood (if we have a house there)
-        if not neighborhoodGUID then
-            local activeNeighborhood = C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
-            if activeNeighborhood and houseInfoList then
+            -- Priority 1: Current neighborhood (if player is physically in one)
+            local currentNeighborhood = C_Housing and C_Housing.GetCurrentNeighborhoodGUID and C_Housing.GetCurrentNeighborhoodGUID()
+            if currentNeighborhood and houseInfoList then
                 for i, houseInfo in ipairs(houseInfoList) do
-                    if houseInfo.neighborhoodGUID == activeNeighborhood then
-                        neighborhoodGUID = activeNeighborhood
+                    if houseInfo.neighborhoodGUID == currentNeighborhood then
+                        neighborhoodGUID = currentNeighborhood
                         selectedIndex = i
                         break
                     end
                 end
             end
-        end
 
-        -- Priority 3: First house in the list (fallback)
-        if not neighborhoodGUID and houseInfoList and #houseInfoList > 0 then
-            neighborhoodGUID = houseInfoList[1].neighborhoodGUID
-            selectedIndex = 1
-        end
+            -- Priority 2: Active neighborhood (if we have a house there)
+            if not neighborhoodGUID then
+                local activeNeighborhood = C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+                if activeNeighborhood and houseInfoList then
+                    for i, houseInfo in ipairs(houseInfoList) do
+                        if houseInfo.neighborhoodGUID == activeNeighborhood then
+                            neighborhoodGUID = activeNeighborhood
+                            selectedIndex = i
+                            break
+                        end
+                    end
+                end
+            end
 
-        self.selectedHouseIndex = selectedIndex
+            -- Priority 3: First house in the list (fallback)
+            if not neighborhoodGUID and houseInfoList and #houseInfoList > 0 then
+                neighborhoodGUID = houseInfoList[1].neighborhoodGUID
+                selectedIndex = 1
+            end
+
+            self.selectedHouseIndex = selectedIndex
+            -- Persist new selection
+            VE_DB = VE_DB or {}
+            VE_DB.selectedHouseIndex = selectedIndex
+        end
 
         -- Notify UI about house list update
         VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = selectedIndex })
@@ -292,7 +281,7 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
             neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
                                C_NeighborhoodInitiative.GetActiveNeighborhood()
         end
-        if neighborhoodGUID then
+        if neighborhoodGUID and neighborhoodGUID ~= "" then
             C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
         end
         C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
@@ -313,7 +302,10 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
             if debug then
                 print("|cFF2aa198[VE Tracker]|r Scheduling retry " .. (attempt + 1) .. "/3 in 10s...")
             end
-            -- Store timer so it can be cancelled if user changes house
+            -- Cancel any existing retry timer before creating new one
+            if self.pendingRetryTimer then
+                self.pendingRetryTimer:Cancel()
+            end
             self.pendingRetryTimer = C_Timer.NewTimer(10, function()
                 self.pendingRetryTimer = nil
                 -- Use selected house's neighborhood for retry
@@ -325,7 +317,7 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
                     neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
                                        C_NeighborhoodInitiative.GetActiveNeighborhood()
                 end
-                if neighborhoodGUID then
+                if neighborhoodGUID and neighborhoodGUID ~= "" then
                     C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
                     C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
                     self:RequestActivityLog()
@@ -490,19 +482,12 @@ function Tracker:GetTaskCouponReward(task)
         local rewards = C_QuestLog.GetQuestRewardCurrencies(task.rewardQuestID)
         if rewards then
             for _, reward in ipairs(rewards) do
-                -- Currency ID 3363 is Community Coupons
-                if reward.currencyID == 3363 then
-                    local baseReward = reward.totalRewardAmount or 0
-
-                    -- Non-repeatable tasks: no DR, just return base
-                    if not task.isRepeatable then
-                        return baseReward
-                    end
-
-                    -- Repeatable tasks: apply DR based on completions
-                    local timesCompleted = task.timesCompleted or 0
-                    local actualReward = math.max(1, baseReward - timesCompleted)
-                    return actualReward
+                -- Community Coupons currency
+                local couponID = VE.Constants and VE.Constants.CURRENCY_IDS and VE.Constants.CURRENCY_IDS.COMMUNITY_COUPONS or 3363
+                if reward.currencyID == couponID then
+                    -- Return API value directly - DR is server-side, not exposed in API
+                    -- This shows base reward; actual may be less for repeated completions
+                    return reward.totalRewardAmount or 0
                 end
             end
         end
@@ -778,6 +763,7 @@ end
 function Tracker:GetTrackedCharacters()
     local state = VE.Store:GetState()
     local characters = {}
+    if not state.characters then return characters end
 
     for charKey, charData in pairs(state.characters) do
         table.insert(characters, {
@@ -878,7 +864,7 @@ function Tracker:RefreshAll()
                            C_NeighborhoodInitiative.GetActiveNeighborhood()
     end
 
-    if neighborhoodGUID then
+    if neighborhoodGUID and neighborhoodGUID ~= "" then
         if debug then
             print("|cFF2aa198[VE Tracker]|r RefreshAll: Setting neighborhood " .. tostring(neighborhoodGUID))
         end
@@ -911,6 +897,9 @@ function Tracker:SelectHouse(index)
     end
 
     self.selectedHouseIndex = index
+    -- Persist selection to SavedVariables
+    VE_DB = VE_DB or {}
+    VE_DB.selectedHouseIndex = index
     local debug = VE.Store:GetState().config.debug
 
     if debug then
@@ -933,6 +922,9 @@ function Tracker:SelectHouse(index)
         if debug then
             print("|cFF2aa198[VE Tracker]|r Called SetActiveNeighborhood, SetViewingNeighborhood, and RequestNeighborhoodInitiativeInfo")
         end
+
+        -- Notify user in chat
+        print("|cFF2aa198[VE]|r Switched to |cFFffd700" .. (houseInfo.houseName or "Unknown") .. "|r. |cFFdc322fNOTE:|r All progress and XP from tasks will now apply to this house.")
     end
 
     -- Notify UI

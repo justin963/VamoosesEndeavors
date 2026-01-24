@@ -44,12 +44,19 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     local padding = UI.panelPadding
 
     -- ========================================================================
-    -- LEADERBOARD HEADER
+    -- LEADERBOARD HEADER (with contribution pip icon)
     -- ========================================================================
 
-    local header = VE.UI:CreateSectionHeader(container, "Contribution Leaderboard")
+    local header = VE.UI:CreateSectionHeader(container, "Leaderboard")
     header:SetPoint("TOPLEFT", padding, -2)
     header:SetPoint("TOPRIGHT", -padding, -2)
+
+    -- Add contribution pip icon to the right of header (next to where XP/coupons would be)
+    local pipIcon = header:CreateTexture(nil, "ARTWORK")
+    pipIcon:SetSize(16, 16)
+    pipIcon:SetPoint("RIGHT", -4, 0)
+    pipIcon:SetAtlas("housing-dashboard-fillbar-pip-complete")
+    header.pipIcon = pipIcon
 
     -- ========================================================================
     -- LEADERBOARD LIST (Scrollable)
@@ -98,11 +105,18 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     summaryRow:SetBackdropColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b, 0.2)
     summaryRow:SetBackdropBorderColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b, 0.4)
 
-    -- Sum icon/label
+    -- Sum icon
+    local summaryIcon = summaryRow:CreateTexture(nil, "ARTWORK")
+    summaryIcon:SetSize(16, 16)
+    summaryIcon:SetPoint("LEFT", 6, 0)
+    summaryIcon:SetAtlas("housefinder_neighborhood-friends-icon")
+    summaryRow.icon = summaryIcon
+
+    -- Sum label
     local summaryLabel = summaryRow:CreateFontString(nil, "OVERLAY")
-    summaryLabel:SetPoint("LEFT", 8, 0)
+    summaryLabel:SetPoint("LEFT", summaryIcon, "RIGHT", 4, 0)
     VE.Theme.ApplyFont(summaryLabel, summaryC)
-    summaryLabel:SetText("|TInterface\\MINIMAP\\TRACKING\\Banker:14:14:0:0|t My Total")
+    summaryLabel:SetText("My Total")
     summaryLabel:SetTextColor(summaryC.accent.r, summaryC.accent.g, summaryC.accent.b)
     summaryRow.label = summaryLabel
 

@@ -236,24 +236,20 @@ function VE.UI:CreateMainFrame(name, title)
     frame.minimizeBtn = minimizeBtn
 
     -- Theme Toggle Button (next to close)
-    local themeBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
-    themeBtn:SetSize(16, 16)
-    themeBtn:SetPoint("RIGHT", -20, 0)
-    ApplyTheme(themeBtn, "Button")
+    local themeBtn = CreateFrame("Button", nil, titleBar)
+    themeBtn:SetSize(18, 18)
+    themeBtn:SetPoint("RIGHT", -21, 0)
 
-    local themeIcon = themeBtn:CreateFontString(nil, "OVERLAY")
-    themeIcon:SetPoint("CENTER")
-    VE.Theme.ApplyFont(themeIcon, Colors, "small")
+    local themeIcon = themeBtn:CreateTexture(nil, "ARTWORK")
+    themeIcon:SetAllPoints()
+    themeIcon:SetAtlas("decor-ability-alterations-active")
     themeBtn.icon = themeIcon
-    titleBar.themeIcon = themeIcon  -- Store for TitleBar skinner
+    titleBar.themeIcon = themeIcon  -- Store reference
 
-    -- Update icon based on current theme
+    -- Update icon (no-op now since it's an atlas)
     local function UpdateThemeIcon()
-        local c = GetScheme()
-        themeIcon:SetText("T")
-        themeIcon:SetTextColor(c.accent.r, c.accent.g, c.accent.b)
+        -- Atlas icon doesn't need color updates
     end
-    UpdateThemeIcon()
 
     -- Helper to get next theme display name
     local function GetNextThemeDisplayName()
@@ -309,18 +305,15 @@ function VE.UI:CreateMainFrame(name, title)
     frame.UpdateThemeIcon = UpdateThemeIcon
 
     -- Close Button (top right)
-    local closeBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
-    closeBtn:SetSize(16, 16)
-    closeBtn:SetPoint("RIGHT", -2, 0)
-    ApplyTheme(closeBtn, "Button")
+    local closeBtn = CreateFrame("Button", nil, titleBar)
+    closeBtn:SetSize(18, 18)
+    closeBtn:SetPoint("RIGHT", -1, 0)
 
-    local closeText = closeBtn:CreateFontString(nil, "OVERLAY")
-    closeText:SetPoint("CENTER")
-    VE.Theme.ApplyFont(closeText, Colors, "small")
-    closeText:SetText("X")
-    closeText:SetTextColor(Colors.error.r, Colors.error.g, Colors.error.b)
-    closeBtn.text = closeText
-    titleBar.closeText = closeText  -- Store for TitleBar skinner
+    local closeIcon = closeBtn:CreateTexture(nil, "ARTWORK")
+    closeIcon:SetAllPoints()
+    closeIcon:SetAtlas("decor-controls-exit-default")
+    closeBtn.icon = closeIcon
+    titleBar.closeIcon = closeIcon  -- Store for TitleBar skinner
 
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
@@ -516,10 +509,11 @@ function VE.UI:CreateTaskRow(parent, options)
     local height = options.height or VE.Constants.UI.taskRowHeight
     local Colors = GetScheme()
 
-    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetHeight(height)
     row:SetBackdrop(BACKDROP_BORDERLESS)
     row:SetBackdropColor(Colors.panel.r, Colors.panel.g, Colors.panel.b, Colors.panel.a * 0.5)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     -- Store scheme for hover scripts
     row._scheme = Colors
@@ -538,6 +532,15 @@ function VE.UI:CreateTaskRow(parent, options)
     repeatIcon:SetAtlas("UI-RefreshButton")
     repeatIcon:Hide()
     row.repeatIcon = repeatIcon
+
+    -- Tracking checkmark (overlays on status/repeat icon when task is pinned)
+    local trackMark = row:CreateTexture(nil, "OVERLAY", nil, 7)  -- High sublevel to draw on top
+    trackMark:SetSize(14, 14)
+    trackMark:SetPoint("LEFT", 0, 0)
+    trackMark:SetAtlas("common-icon-checkmark")
+    trackMark:SetVertexColor(Colors.success.r, Colors.success.g, Colors.success.b)
+    trackMark:Hide()
+    row.trackMark = trackMark
 
     -- Task name (use theme-aware text color)
     local name = row:CreateFontString(nil, "OVERLAY")
@@ -632,7 +635,39 @@ function VE.UI:CreateTaskRow(parent, options)
             end
             self.name:SetTextColor(C.text.r, C.text.g, C.text.b)
         end
+
+        -- Update tracking checkmark
+        if task.tracked and not task.completed then
+            self.trackMark:Show()
+        else
+            self.trackMark:Hide()
+        end
     end
+
+    -- Toggle tracking state
+    function row:ToggleTracking()
+        if not self.task or not self.task.id then return end
+        if self.task.completed then return end  -- Can't track completed tasks
+
+        if C_NeighborhoodInitiative then
+            if self.task.tracked then
+                C_NeighborhoodInitiative.RemoveTrackedInitiativeTask(self.task.id)
+                self.task.tracked = false
+            else
+                C_NeighborhoodInitiative.AddTrackedInitiativeTask(self.task.id)
+                self.task.tracked = true
+            end
+            self.trackMark:SetShown(self.task.tracked)
+            PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        end
+    end
+
+    -- Click handler (shift-click to track)
+    row:SetScript("OnClick", function(self, button)
+        if IsModifiedClick("QUESTWATCHTOGGLE") then
+            self:ToggleTracking()
+        end
+    end)
 
     -- Hover effect
     row:EnableMouse(true)
@@ -652,7 +687,20 @@ function VE.UI:CreateTaskRow(parent, options)
             end
             -- Show coupon reward info
             if self.task.couponReward and self.task.couponReward > 0 then
-                GameTooltip:AddLine("Next reward: +" .. self.task.couponReward .. " coupons", c.accent.r, c.accent.g, c.accent.b)
+                local label = self.task.isRepeatable and "Base reward" or "Reward"
+                GameTooltip:AddLine(label .. ": +" .. self.task.couponReward .. " coupons", c.accent.r, c.accent.g, c.accent.b)
+                if self.task.isRepeatable and self.task.timesCompleted and self.task.timesCompleted > 0 then
+                    GameTooltip:AddLine("(Decreases with completions)", 0.5, 0.5, 0.5)
+                end
+            end
+            -- Tracking hint
+            if not self.task.completed then
+                GameTooltip:AddLine(" ")
+                if self.task.tracked then
+                    GameTooltip:AddLine("Shift-click to untrack", 0.5, 0.5, 0.5)
+                else
+                    GameTooltip:AddLine("Shift-click to track", 0.5, 0.5, 0.5)
+                end
             end
             GameTooltip:Show()
         end

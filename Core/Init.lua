@@ -170,6 +170,43 @@ SlashCmdList["VE"] = function(msg)
         if VE.EndeavorTracker then
             VE.EndeavorTracker:DumpTaskXPData()
         end
+    elseif command == "coupons" then
+        -- Debug: dump coupon reward data from API
+        print("|cFF2aa198[VE]|r === Coupon Reward Debug ===")
+        if C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetNeighborhoodInitiativeInfo then
+            local info = C_NeighborhoodInitiative.GetNeighborhoodInitiativeInfo()
+            if info and info.tasks then
+                for _, task in ipairs(info.tasks) do
+                    if task.rewardQuestID and task.rewardQuestID > 0 then
+                        local rewards = C_QuestLog.GetQuestRewardCurrencies(task.rewardQuestID)
+                        local couponData = nil
+                        if rewards then
+                            for _, r in ipairs(rewards) do
+                                if r.currencyID == 3363 then
+                                    couponData = r
+                                    break
+                                end
+                            end
+                        end
+                        if couponData then
+                            local rep = task.taskType and task.taskType > 0 and "REP" or "ONE"
+                            print(string.format("[%s] %s", rep, task.taskName or "?"))
+                            print(string.format("  rewardQuestID=%d, timesCompleted=%d, completed=%s",
+                                task.rewardQuestID, task.timesCompleted or 0, tostring(task.completed)))
+                            print(string.format("  API coupon data: baseAmount=%s, totalAmount=%s, bonusAmount=%s",
+                                tostring(couponData.baseRewardAmount), tostring(couponData.totalRewardAmount), tostring(couponData.bonusRewardAmount)))
+                            -- Show all fields in couponData
+                            print("  All coupon fields:")
+                            for k, v in pairs(couponData) do
+                                print(string.format("    %s = %s", tostring(k), tostring(v)))
+                            end
+                        end
+                    end
+                end
+            else
+                print("No initiative info available")
+            end
+        end
     elseif command == "tasks" then
         -- Debug: dump task structure - search for specific tasks
         print("|cFF2aa198[VE]|r Searching for debug tasks...")

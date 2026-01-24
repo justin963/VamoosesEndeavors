@@ -242,36 +242,38 @@ function VE:CreateMainWindow()
     statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 0, -4)
     statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", 0, -4)
 
-    -- Coupons icon (left side)
-    local couponsIcon = statsRow:CreateTexture(nil, "ARTWORK")
-    couponsIcon:SetSize(14, 14)
-    couponsIcon:SetPoint("LEFT", 0, 0)
-    frame.couponsIcon = couponsIcon
+    -- Contribution value (right-most)
+    local xpValue = statsRow:CreateFontString(nil, "OVERLAY")
+    xpValue:SetPoint("RIGHT", 0, 0)
+    VE.Theme.ApplyFont(xpValue, C, "small")
+    xpValue:SetTextColor(C.endeavor.r, C.endeavor.g, C.endeavor.b)
+    xpValue._colorType = "endeavor"
+    VE.Theme:Register(xpValue, "HeaderText")
+    frame.xpValue = xpValue
 
-    -- Coupons count
-    local couponsText = statsRow:CreateFontString(nil, "OVERLAY")
-    couponsText:SetPoint("LEFT", couponsIcon, "RIGHT", 4, 0)
-    VE.Theme.ApplyFont(couponsText, C, "small")
-    couponsText:SetTextColor(C.warning.r, C.warning.g, C.warning.b)
-    couponsText._colorType = "warning"
-    VE.Theme:Register(couponsText, "HeaderText")
-    frame.couponsText = couponsText
+    -- Contribution pip icon
+    local contribIcon = statsRow:CreateTexture(nil, "ARTWORK")
+    contribIcon:SetSize(14, 14)
+    contribIcon:SetPoint("RIGHT", xpValue, "LEFT", -4, 0)
+    contribIcon:SetAtlas("housing-dashboard-fillbar-pip-complete")
+    frame.contribIcon = contribIcon
 
-    -- House XP from tasks (after coupons)
-    local houseXpIcon = statsRow:CreateTexture(nil, "ARTWORK")
-    houseXpIcon:SetSize(14, 14)
-    houseXpIcon:SetPoint("LEFT", couponsText, "RIGHT", 12, 0)
-    houseXpIcon:SetAtlas("house-reward-increase-arrows")
-    houseXpIcon:SetRotation(math.pi / 2) -- 90 degrees counter-clockwise
-    frame.houseXpIcon = houseXpIcon
-
+    -- House XP text
     local houseXpText = statsRow:CreateFontString(nil, "OVERLAY")
-    houseXpText:SetPoint("LEFT", houseXpIcon, "RIGHT", 4, 0)
+    houseXpText:SetPoint("RIGHT", contribIcon, "LEFT", -12, 0)
     VE.Theme.ApplyFont(houseXpText, C, "small")
     houseXpText:SetTextColor(C.endeavor.r, C.endeavor.g, C.endeavor.b)
     houseXpText._colorType = "endeavor"
     VE.Theme:Register(houseXpText, "HeaderText")
     frame.houseXpText = houseXpText
+
+    -- House XP icon
+    local houseXpIcon = statsRow:CreateTexture(nil, "ARTWORK")
+    houseXpIcon:SetSize(14, 14)
+    houseXpIcon:SetPoint("RIGHT", houseXpText, "LEFT", -4, 0)
+    houseXpIcon:SetAtlas("house-reward-increase-arrows")
+    houseXpIcon:SetRotation(math.pi / 2) -- 90 degrees counter-clockwise
+    frame.houseXpIcon = houseXpIcon
 
     -- Tooltip hover area for house XP
     local houseXpHover = CreateFrame("Frame", nil, statsRow)
@@ -297,24 +299,20 @@ function VE:CreateMainWindow()
         GameTooltip:Hide()
     end)
 
-    -- Character contribution label (right side)
-    local xpLabel = statsRow:CreateFontString(nil, "OVERLAY")
-    xpLabel:SetPoint("RIGHT", -40, 0)
-    VE.Theme.ApplyFont(xpLabel, C, "small")
-    xpLabel:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
-    xpLabel:SetText("Contribution:")
-    xpLabel._colorType = "text_dim"
-    VE.Theme:Register(xpLabel, "HeaderText")
-    frame.xpLabel = xpLabel
+    -- Coupons count
+    local couponsText = statsRow:CreateFontString(nil, "OVERLAY")
+    couponsText:SetPoint("RIGHT", houseXpIcon, "LEFT", -12, 0)
+    VE.Theme.ApplyFont(couponsText, C, "small")
+    couponsText:SetTextColor(C.warning.r, C.warning.g, C.warning.b)
+    couponsText._colorType = "warning"
+    VE.Theme:Register(couponsText, "HeaderText")
+    frame.couponsText = couponsText
 
-    -- XP earned value
-    local xpValue = statsRow:CreateFontString(nil, "OVERLAY")
-    xpValue:SetPoint("LEFT", xpLabel, "RIGHT", 4, 0)
-    VE.Theme.ApplyFont(xpValue, C, "small")
-    xpValue:SetTextColor(C.endeavor.r, C.endeavor.g, C.endeavor.b)
-    xpValue._colorType = "endeavor"
-    VE.Theme:Register(xpValue, "HeaderText")
-    frame.xpValue = xpValue
+    -- Coupons icon
+    local couponsIcon = statsRow:CreateTexture(nil, "ARTWORK")
+    couponsIcon:SetSize(14, 14)
+    couponsIcon:SetPoint("RIGHT", couponsText, "LEFT", -4, 0)
+    frame.couponsIcon = couponsIcon
 
     -- Update house dropdown when house list changes
     function frame:UpdateHouseDropdown(houseList, selectedIndex)
@@ -389,22 +387,32 @@ function VE:CreateMainWindow()
                     end)
                 end
             end)
-        elseif status.state == "loaded" or status.state == "fetching" then
-            -- Status says loaded but no data yet, or actively fetching
-            text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255) .. "Fetching data...|r"
+        elseif status.state == "fetching" then
+            -- Actively fetching - only show if we don't have data yet
+            if not hasData then
+                text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255) .. "Fetching data...|r"
+            end
         elseif status.state == "retrying" then
             local remaining = status.nextRetry and (status.nextRetry - time()) or 60
             if remaining < 0 then remaining = 0 end
             text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255)
             text = text .. "Retry " .. (status.attempt or 1) .. "/3 in " .. remaining .. "s|r"
         else
-            text = "|cFF" .. string.format("%02x%02x%02x", colors.text_dim.r*255, colors.text_dim.g*255, colors.text_dim.b*255) .. "Waiting for data...|r"
+            -- Only show waiting message if we don't have data yet
+            if not hasData then
+                text = "|cFF" .. string.format("%02x%02x%02x", colors.text_dim.r*255, colors.text_dim.g*255, colors.text_dim.b*255) .. "Waiting for data...|r"
+            end
         end
 
-        -- Show fetch status, hide house level (they share the same space)
+        -- Show fetch status OR house level (they share the same space)
         if text ~= "" then
             self.fetchStatusText:SetText(text)
             self.houseLevelText:Hide()
+        else
+            -- No status to show - display house level instead
+            self.fetchStatusText:SetText("")
+            self.houseLevelText:Show()
+            self:UpdateHousingDisplay()
         end
     end
 
@@ -459,6 +467,32 @@ function VE:CreateMainWindow()
         -- Update house dropdown
         if VE.EndeavorTracker then
             frame:UpdateHouseDropdown(VE.EndeavorTracker:GetHouseList(), VE.EndeavorTracker:GetSelectedHouseIndex())
+        end
+        -- Recreate countdown ticker if needed (cancelled on hide)
+        if not frame.fetchStatusTicker then
+            frame.fetchStatusTicker = C_Timer.NewTicker(1, function()
+                if frame:IsShown() and VE.EndeavorTracker then
+                    local status = VE.EndeavorTracker.fetchStatus
+                    if status and status.state == "retrying" then
+                        frame:UpdateFetchStatus(status)
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- Cancel ticker and hide tooltip on hide
+    frame:HookScript("OnHide", function()
+        if frame.fetchStatusTicker then
+            frame.fetchStatusTicker:Cancel()
+            frame.fetchStatusTicker = nil
+        end
+        if frame.fetchStatusFadeTimer then
+            frame.fetchStatusFadeTimer:Cancel()
+            frame.fetchStatusFadeTimer = nil
+        end
+        if GameTooltip:IsOwned(frame) then
+            GameTooltip:Hide()
         end
     end)
 
