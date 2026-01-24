@@ -6,15 +6,13 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.0 - Multi-House & XP Tracking**
+## **What's New in v1.5.1 - Stability & Persistence**
 
-- **Multi-House Support** - Switch between owned houses to view and complete endeavor tasks for each
-- **House Level Display** - See house level and XP progress toward next level
-- **House XP Earned** - Track total estimated XP from completed endeavors
-- **Task Sorting** - Sort by XP or Coupons (ascending/descending)
-- **Leaderboard My Total** - Combined contributions across all your alts
-- **Automatic Data Loading** - Data loading issues resolved! Endeavors now load automatically on login and stay up to date (no more opening Blizzard's Housing Dashboard)
-- **Fetch Status Display** - See loading state and last updated timestamp
+- **House Selection Persists** - Your selected house now saves across sessions and reloads
+- **Fixed UI Flickering** - XP/house level no longer hides during background refreshes
+- **Memory & Performance** - Fixed memory leak from countdown ticker, removed aggressive auto-refresh
+- **Dropdown Stability** - Selection no longer resets when house list updates
+- **Improved Coupon Display** - Shows base reward with note about diminishing returns
 
 *See CHANGELOG.txt for complete version history*
 
@@ -134,5 +132,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.0
+**Version:** 1.5.1
 **Game Version:** 12.0.0+ (Midnight)
