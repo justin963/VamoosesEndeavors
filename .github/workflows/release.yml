@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Prepare job - creates the zip and extracts changelog
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANGELOG=$(grep -A 55 "Version $VERSION" CHANGELOG.txt | tail -n +3 | head -52 | sed '/^---$/,$d')
+          CHANGELOG="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
+
+      - name: Create addon zip
+        run: |
+          # Create a temp directory with the addon name
+          mkdir -p VamoosesEndeavors
+          # Copy all addon files (excluding git and github folders)
+          rsync -av --exclude='.git' --exclude='.github' . VamoosesEndeavors/
+          # Create the zip from parent perspective
+          zip -r VamoosesEndeavors-${{ steps.version.outputs.version }}.zip VamoosesEndeavors \
+            -x "*.DS_Store" \
+            -x "__MACOSX/*"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-zip
+          path: VamoosesEndeavors-${{ steps.version.outputs.version }}.zip
+
+  # CurseForge upload
+  curseforge:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip
+
+      - name: Upload to CurseForge
+        uses: itsmeow/curseforge-upload@v3.1.2
+        with:
+          token: ${{ secrets.CF_API_TOKEN }}
+          project_id: 1439416
+          game_endpoint: wow
+          file_path: VamoosesEndeavors-${{ needs.prepare.outputs.version }}.zip
+          changelog: ${{ needs.prepare.outputs.changelog }}
+          changelog_type: text
+          display_name: Vamoose's Endeavors v${{ needs.prepare.outputs.version }}
+          game_versions: |
+            12.0.0
+          release_type: release
+
+  # Wago upload
+  wago:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip
+
+      - name: Upload to Wago.io
+        env:
+          CHANGELOG_RAW: ${{ needs.prepare.outputs.changelog }}
+        run: |
+          CHANGELOG="$CHANGELOG_RAW"
+          CHANGELOG="${CHANGELOG//'%0A'/$'\n'}"
+          CHANGELOG="${CHANGELOG//'%0D'/}"
+          CHANGELOG="${CHANGELOG//'%25'/%}"
+
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="See CHANGELOG.txt for details"
+          fi
+
+          jq -n \
+            --arg label "${{ needs.prepare.outputs.version }}" \
+            --arg stability "stable" \
+            --arg patch "12.0.0" \
+            --arg changelog "$CHANGELOG" \
+            '{label: $label, stability: $stability, supported_retail_patch: $patch, changelog: $changelog}' > metadata.json
+
+          curl -X POST "https://addons.wago.io/api/projects/v6333l6b/version" \
+            -H "Authorization: Bearer ${{ secrets.WAGO_API_TOKEN }}" \
+            -H "Accept: application/json" \
+            -F "metadata=<metadata.json" \
+            -F "file=@VamoosesEndeavors-${{ needs.prepare.outputs.version }}.zip"
+
+  # GitHub Release
+  github-release:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: VamoosesEndeavors-${{ needs.prepare.outputs.version }}.zip
+          body: |
+            ## Vamoose's Endeavors v${{ needs.prepare.outputs.version }}
+
+            ${{ needs.prepare.outputs.changelog }}
+
+            ### Downloads
+            - [CurseForge](https://www.curseforge.com/wow/addons/vamooses-endeavors)
+            - [Wago.io](https://addons.wago.io/addons/vamooses-endeavors)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
