@@ -41,29 +41,22 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
 
-    local padding = UI.panelPadding
+    local padding = 0  -- Container edge padding (0 for full-bleed atlas backgrounds)
 
     -- ========================================================================
     -- LEADERBOARD HEADER (with contribution pip icon)
     -- ========================================================================
 
     local header = VE.UI:CreateSectionHeader(container, "Leaderboard")
-    header:SetPoint("TOPLEFT", padding, -2)
-    header:SetPoint("TOPRIGHT", -padding, -2)
-
-    -- Add contribution pip icon to the right of header (next to where XP/coupons would be)
-    local pipIcon = header:CreateTexture(nil, "ARTWORK")
-    pipIcon:SetSize(16, 16)
-    pipIcon:SetPoint("RIGHT", -4, 0)
-    pipIcon:SetAtlas("housing-dashboard-fillbar-pip-complete")
-    header.pipIcon = pipIcon
+    header:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
+    header:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
     -- ========================================================================
     -- LEADERBOARD LIST (Scrollable)
     -- ========================================================================
 
     local listContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    listContainer:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
+    listContainer:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     listContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
     listContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -71,16 +64,11 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     })
     container.listContainer = listContainer
 
-    -- Apply initial colors
-    local function ApplyListContainerColors()
-        local C = GetColors()
-        listContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3)
-    end
+    -- Atlas background support
+    local ApplyListContainerColors = VE.UI:AddAtlasBackground(listContainer)
     ApplyListContainerColors()
 
-    local scrollFrame, scrollContent = VE.UI:CreateScrollFrame(listContainer)
-    scrollFrame:SetPoint("TOPLEFT", 2, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -2, 2)
+    local _, scrollContent = VE.UI:CreateScrollFrame(listContainer)
     container.scrollContent = scrollContent
 
     -- Pool of leaderboard rows
@@ -280,7 +268,14 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     container.loadingText:SetTextColor(loadingColors.text_dim.r, loadingColors.text_dim.g, loadingColors.text_dim.b)
     container.loadingText:Hide()
 
-    function container:Update()
+    function container:Update(forceUpdate)
+        -- Skip rebuild if data hasn't changed (optimization)
+        local currentTimestamp = VE.EndeavorTracker and VE.EndeavorTracker.activityLogLastUpdated
+        if not forceUpdate and self.lastActivityUpdate and self.lastActivityUpdate == currentTimestamp then
+            return
+        end
+        self.lastActivityUpdate = currentTimestamp
+
         -- Hide all existing rows
         for _, row in ipairs(self.rows) do
             row:Hide()
@@ -306,27 +301,12 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
 
             if isFetching then
                 self.emptyText:SetText("Loading activity data...")
-                if self.setActiveButton then
-                    self.setActiveButton:Hide()
-                end
+                if self.setActiveButton then self.setActiveButton:Hide() end
             else
                 self.emptyText:SetText("No activity data available.\nThis house is not set as your active endeavor.")
-                -- Create "Set as Active" button if needed
+                -- Create button via factory (once)
                 if not self.setActiveButton then
-                    self.setActiveButton = CreateFrame("Button", nil, self.scrollContent, "UIPanelButtonTemplate")
-                    self.setActiveButton:SetSize(120, 24)
-                    self.setActiveButton:SetPoint("TOP", self.emptyText, "BOTTOM", 0, -12)
-                    self.setActiveButton:SetText("Set as Active")
-                    self.setActiveButton:SetScript("OnClick", function()
-                        local tracker = VE.EndeavorTracker
-                        if tracker then
-                            tracker:SetAsActiveEndeavor()
-                        end
-                    end)
-                end
-                local fs = self.setActiveButton:GetFontString()
-                if fs then
-                    VE.Theme.ApplyFont(fs, colors)
+                    self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText)
                 end
                 self.setActiveButton:Show()
             end

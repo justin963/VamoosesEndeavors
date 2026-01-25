@@ -57,16 +57,95 @@ end
 
 -- Event Handler
 VE.frame:SetScript("OnEvent", function(self, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == "VamoosesEndeavors" then
-        VE:OnInitialize()
-        self:UnregisterEvent("ADDON_LOADED")
+    if event == "ADDON_LOADED" then
+        if arg1 == "VamoosesEndeavors" then
+            VE:OnInitialize()
+        elseif arg1 == "Blizzard_HousingDashboard" then
+            VE:HookHousingDashboard()
+            self:UnregisterEvent("ADDON_LOADED")
+        end
     elseif event == "PLAYER_LOGIN" then
         VE:OnEnable()
+        -- Check if Housing Dashboard is already loaded
+        if C_AddOns.IsAddOnLoaded("Blizzard_HousingDashboard") then
+            VE:HookHousingDashboard()
+            VE.frame:UnregisterEvent("ADDON_LOADED")
+        end
         self:UnregisterEvent("PLAYER_LOGIN")
     elseif event == "PLAYER_LOGOUT" then
         VE.Store:Flush()
     end
 end)
+
+-- Hook into Blizzard Housing Dashboard to add VE button
+function VE:HookHousingDashboard()
+    if self.dashboardHooked then return end
+
+    -- Find the Housing Dashboard frame (HousingDashboardFrame.HouseInfoContent.ContentFrame.InitiativesFrame)
+    local dashboard = HousingDashboardFrame
+    if not dashboard or not dashboard.HouseInfoContent then return end
+
+    local houseInfo = dashboard.HouseInfoContent
+    if not houseInfo.ContentFrame then return end
+
+    local contentFrame = houseInfo.ContentFrame
+    if not contentFrame.InitiativesFrame then return end
+
+    local initiativesFrame = contentFrame.InitiativesFrame
+
+    -- Create VE toggle button with wood sign background
+    local btn = CreateFrame("Button", "VE_DashboardButton", initiativesFrame)
+    btn:SetSize(70, 32)
+    btn:SetFrameStrata("HIGH")
+    -- Position to the right of Activity title
+    local activityFrame = initiativesFrame.InitiativeSetFrame and initiativesFrame.InitiativeSetFrame.InitiativeActivity
+    if activityFrame then
+        btn:SetPoint("TOPRIGHT", activityFrame, "TOPRIGHT", -20, 0)
+    else
+        btn:SetPoint("TOPRIGHT", initiativesFrame, "TOPRIGHT", -10, -10)
+    end
+
+    -- Wood sign background
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetAtlas("housing-woodsign")
+    btn.bg = bg
+
+    -- Button text
+    local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetPoint("CENTER", 0, 0)
+    text:SetText("Endeavor\nTracker")
+    text:SetJustifyH("CENTER")
+    btn.text = text
+    btn:SetScript("OnClick", function()
+        VE:ToggleWindow()
+    end)
+    btn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Vamoose's Endeavors", 1, 1, 1)
+        GameTooltip:AddLine("Click to toggle the VE tracker window", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    self.dashboardButton = btn
+    self.dashboardHooked = true
+
+    -- Apply initial visibility based on config
+    self:UpdateDashboardButtonVisibility()
+end
+
+-- Update dashboard button visibility based on config
+function VE:UpdateDashboardButtonVisibility()
+    if not self.dashboardButton then return end
+    local showButton = true
+    if VE.Store and VE.Store.state and VE.Store.state.config then
+        showButton = VE.Store.state.config.showDashboardButton ~= false
+    end
+    self.dashboardButton:SetShown(showButton)
+end
 
 -- Toggle main window (alias for minimap/compartment)
 function VE:Toggle()

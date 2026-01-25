@@ -18,19 +18,19 @@ function VE.UI.Tabs:CreateActivity(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
 
-    local padding = UI.panelPadding
+    local padding = 0  -- Container edge padding (0 for full-bleed atlas backgrounds)
 
     -- ========================================================================
     -- TOP ACTIVITIES SECTION
     -- ========================================================================
 
     local topHeader = VE.UI:CreateSectionHeader(container, "Top 5 Tasks")
-    topHeader:SetPoint("TOPLEFT", padding, -2)
-    topHeader:SetPoint("TOPRIGHT", -padding, -2)
+    topHeader:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
+    topHeader:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
     local topContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    topContainer:SetPoint("TOPLEFT", topHeader, "BOTTOMLEFT", 0, -2)
-    topContainer:SetPoint("TOPRIGHT", topHeader, "BOTTOMRIGHT", 0, -2)
+    topContainer:SetPoint("TOPLEFT", topHeader, "BOTTOMLEFT", 0, 0)
+    topContainer:SetPoint("TOPRIGHT", topHeader, "BOTTOMRIGHT", 0, 0)
     topContainer:SetHeight(130) -- 5 rows x 24 + padding
     topContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -38,16 +38,76 @@ function VE.UI.Tabs:CreateActivity(parent)
     })
     container.topContainer = topContainer
 
+    -- Atlas background support
+    local ApplyTopContainerColors = VE.UI:AddAtlasBackground(topContainer)
+
     -- ========================================================================
     -- ACTIVITY FEED SECTION
     -- ========================================================================
 
     local feedHeader = VE.UI:CreateSectionHeader(container, "Recent Activity")
-    feedHeader:SetPoint("TOPLEFT", topContainer, "BOTTOMLEFT", 0, -6)
-    feedHeader:SetPoint("TOPRIGHT", topContainer, "BOTTOMRIGHT", 0, -6)
+    feedHeader:SetPoint("TOPLEFT", topContainer, "BOTTOMLEFT", 0, 0)
+    feedHeader:SetPoint("TOPRIGHT", topContainer, "BOTTOMRIGHT", 0, 0)
+
+    -- Decimal precision control (1-3)
+    container.decimalPrecision = 1
+
+    -- Decrease decimals arrow (rotated left)
+    local decArrow = CreateFrame("Button", nil, feedHeader)
+    decArrow:SetSize(12, 12)
+    decArrow:SetPoint("RIGHT", feedHeader, "RIGHT", -18, 0)
+    local decTex = decArrow:CreateTexture(nil, "ARTWORK")
+    decTex:SetAllPoints()
+    decTex:SetAtlas("housing-floor-arrow-up-disabled")
+    decTex:SetRotation(math.rad(90)) -- Rotate to point left
+    decArrow.tex = decTex
+    decArrow:SetScript("OnClick", function()
+        if container.decimalPrecision > 1 then
+            container.decimalPrecision = container.decimalPrecision - 1
+            container:Update(true)
+        end
+    end)
+    decArrow:SetScript("OnEnter", function(self)
+        self.tex:SetAlpha(1)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Decrease decimal places")
+        GameTooltip:Show()
+    end)
+    decArrow:SetScript("OnLeave", function(self)
+        self.tex:SetAlpha(0.7)
+        GameTooltip:Hide()
+    end)
+    decTex:SetAlpha(0.7)
+
+    -- Increase decimals arrow (rotated right)
+    local incArrow = CreateFrame("Button", nil, feedHeader)
+    incArrow:SetSize(12, 12)
+    incArrow:SetPoint("RIGHT", feedHeader, "RIGHT", -4, 0)
+    local incTex = incArrow:CreateTexture(nil, "ARTWORK")
+    incTex:SetAllPoints()
+    incTex:SetAtlas("housing-floor-arrow-up-disabled")
+    incTex:SetRotation(math.rad(-90)) -- Rotate to point right
+    incArrow.tex = incTex
+    incArrow:SetScript("OnClick", function()
+        if container.decimalPrecision < 3 then
+            container.decimalPrecision = container.decimalPrecision + 1
+            container:Update(true)
+        end
+    end)
+    incArrow:SetScript("OnEnter", function(self)
+        self.tex:SetAlpha(1)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Increase decimal places")
+        GameTooltip:Show()
+    end)
+    incArrow:SetScript("OnLeave", function(self)
+        self.tex:SetAlpha(0.7)
+        GameTooltip:Hide()
+    end)
+    incTex:SetAlpha(0.7)
 
     local feedContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    feedContainer:SetPoint("TOPLEFT", feedHeader, "BOTTOMLEFT", 0, -2)
+    feedContainer:SetPoint("TOPLEFT", feedHeader, "BOTTOMLEFT", 0, 0)
     feedContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
     feedContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -55,17 +115,17 @@ function VE.UI.Tabs:CreateActivity(parent)
     })
     container.feedContainer = feedContainer
 
-    -- Apply container colors
+    -- Atlas background support
+    local ApplyFeedContainerColors = VE.UI:AddAtlasBackground(feedContainer)
+
+    -- Apply container colors (both containers)
     local function ApplyContainerColors()
-        local C = GetColors()
-        topContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3)
-        feedContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3)
+        ApplyTopContainerColors()
+        ApplyFeedContainerColors()
     end
     ApplyContainerColors()
 
-    local scrollFrame, scrollContent = VE.UI:CreateScrollFrame(feedContainer)
-    scrollFrame:SetPoint("TOPLEFT", 2, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -2, 2)
+    local _, scrollContent = VE.UI:CreateScrollFrame(feedContainer)
     container.scrollContent = scrollContent
 
     -- Pool for top task rows
@@ -214,7 +274,8 @@ function VE.UI.Tabs:CreateActivity(parent)
             self.timeText:SetText(timeAgo)
             self.playerName:SetText(entry.playerName or "Unknown")
             self.taskName:SetText(entry.taskName or "Unknown Task")
-            self.amount:SetText(string.format("+%.1f", entry.amount or 0))
+            local precision = container.decimalPrecision or 1
+            self.amount:SetText(string.format("+%." .. precision .. "f", entry.amount or 0))
 
             -- Apply theme colors + fonts
             self.timeText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
@@ -245,7 +306,14 @@ function VE.UI.Tabs:CreateActivity(parent)
     -- UPDATE FUNCTION
     -- ========================================================================
 
-    function container:Update()
+    function container:Update(forceUpdate)
+        -- Skip rebuild if data hasn't changed (optimization)
+        local currentTimestamp = VE.EndeavorTracker and VE.EndeavorTracker.activityLogLastUpdated
+        if not forceUpdate and self.lastActivityUpdate and self.lastActivityUpdate == currentTimestamp then
+            return
+        end
+        self.lastActivityUpdate = currentTimestamp
+
         -- Hide all existing rows
         for _, row in ipairs(self.topRows) do
             row:Hide()
@@ -274,27 +342,12 @@ function VE.UI.Tabs:CreateActivity(parent)
 
             if isFetching then
                 self.emptyText:SetText("Loading activity data...")
-                if self.setActiveButton then
-                    self.setActiveButton:Hide()
-                end
+                if self.setActiveButton then self.setActiveButton:Hide() end
             else
                 self.emptyText:SetText("No activity data available.\nThis house is not set as your active endeavor.")
-                -- Create "Set as Active" button if needed
+                -- Create button via factory (once)
                 if not self.setActiveButton then
-                    self.setActiveButton = CreateFrame("Button", nil, self.scrollContent, "UIPanelButtonTemplate")
-                    self.setActiveButton:SetSize(120, 24)
-                    self.setActiveButton:SetPoint("TOP", self.emptyText, "BOTTOM", 0, -12)
-                    self.setActiveButton:SetText("Set as Active")
-                    self.setActiveButton:SetScript("OnClick", function()
-                        local tracker = VE.EndeavorTracker
-                        if tracker then
-                            tracker:SetAsActiveEndeavor()
-                        end
-                    end)
-                end
-                local fs = self.setActiveButton:GetFontString()
-                if fs then
-                    VE.Theme.ApplyFont(fs, colors)
+                    self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText)
                 end
                 self.setActiveButton:Show()
             end

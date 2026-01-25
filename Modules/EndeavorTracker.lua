@@ -175,6 +175,15 @@ function Tracker:OnEvent(event, ...)
             VE_DB.selectedHouseIndex = selectedIndex
         end
 
+        -- Update house GUID and request fresh level data for the selected house
+        local selectedHouseInfo = houseInfoList and houseInfoList[selectedIndex]
+        if selectedHouseInfo and selectedHouseInfo.houseGUID then
+            VE.Store:Dispatch("SET_HOUSE_GUID", { houseGUID = selectedHouseInfo.houseGUID })
+            if C_Housing and C_Housing.GetCurrentHouseLevelFavor then
+                pcall(C_Housing.GetCurrentHouseLevelFavor, selectedHouseInfo.houseGUID)
+            end
+        end
+
         -- Notify UI about house list update
         VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = selectedIndex })
 
@@ -212,12 +221,79 @@ end
 -- ============================================================================
 
 function Tracker:UpdateFetchStatus(state, attempt, nextRetryTime)
+    local prevState = self.fetchStatus.state
     self.fetchStatus.state = state
     self.fetchStatus.attempt = attempt or self.fetchStatus.attempt
     self.fetchStatus.lastAttempt = time()
     self.fetchStatus.nextRetry = nextRetryTime
-    VE.EventBus:Trigger("VE_FETCH_STATUS_CHANGED", self.fetchStatus)
+    -- Only fire event if state actually changed (prevents spam on repeated "loaded" calls)
+    if prevState ~= state then
+        VE.EventBus:Trigger("VE_FETCH_STATUS_CHANGED", self.fetchStatus)
+    end
 end
+
+-- ============================================================================
+-- HELPER FUNCTIONS (Architecture: extracted for clarity per AI guidelines)
+-- ============================================================================
+
+function Tracker:GetViewingNeighborhoodGUID()
+    if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
+        return self.houseList[self.selectedHouseIndex].neighborhoodGUID
+    end
+    return nil
+end
+
+function Tracker:IsViewingActiveNeighborhood()
+    if not C_NeighborhoodInitiative then return false end
+    local activeGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+    local viewingGUID = self:GetViewingNeighborhoodGUID()
+    if not activeGUID or not viewingGUID then return true end -- Assume active if can't determine
+    return activeGUID == viewingGUID
+end
+
+function Tracker:SetupNeighborhoodContext(neighborhoodGUID, asActive)
+    if not neighborhoodGUID or neighborhoodGUID == "" then return false end
+    if not C_NeighborhoodInitiative then return false end
+
+    local debug = VE.Store:GetState().config.debug
+    if debug then
+        print("|cFF2aa198[VE Tracker]|r Setting up neighborhood context:", neighborhoodGUID, asActive and "(active)" or "(viewing)")
+    end
+
+    C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+    if asActive then
+        C_NeighborhoodInitiative.SetActiveNeighborhood(neighborhoodGUID)
+    end
+    C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+    self:RequestActivityLog()
+    return true
+end
+
+function Tracker:ClearEndeavorData()
+    self:UpdateFetchStatus("loaded", 0, nil)
+    VE.Store:Dispatch("SET_ENDEAVOR_INFO", {
+        seasonName = "Not Active Endeavor",
+        daysRemaining = 0,
+        currentProgress = 0,
+        maxProgress = 0,
+        milestones = {},
+    })
+    VE.Store:Dispatch("SET_TASKS", { tasks = {} })
+    self.activityLogLoaded = false
+    VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = nil })
+end
+
+function Tracker:ValidateRequirements()
+    if not C_NeighborhoodInitiative then return "api_unavailable" end
+    if not C_NeighborhoodInitiative.IsInitiativeEnabled() then return "disabled" end
+    if not C_NeighborhoodInitiative.PlayerMeetsRequiredLevel() then return "low_level" end
+    if not C_NeighborhoodInitiative.PlayerHasInitiativeAccess() then return "no_access" end
+    return "ok"
+end
+
+-- ============================================================================
+-- DATA FETCHING (Main)
+-- ============================================================================
 
 function Tracker:FetchEndeavorData(skipRequest, attempt)
     local debug = VE.Store:GetState().config.debug
@@ -960,6 +1036,14 @@ function Tracker:SelectHouse(index)
     VE.Store:Dispatch("SET_TASKS", { tasks = {} })
     self.activityLogLoaded = false
     VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = nil })
+
+    -- Update house GUID and request fresh level data for the selected house
+    if houseInfo.houseGUID then
+        VE.Store:Dispatch("SET_HOUSE_GUID", { houseGUID = houseInfo.houseGUID })
+        if C_Housing and C_Housing.GetCurrentHouseLevelFavor then
+            pcall(C_Housing.GetCurrentHouseLevelFavor, houseInfo.houseGUID)
+        end
+    end
 
     -- Only set viewing context (not active) - user must click "Set as Active" button
     if C_NeighborhoodInitiative then

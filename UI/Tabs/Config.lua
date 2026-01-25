@@ -18,22 +18,22 @@ function VE.UI.Tabs:CreateConfig(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
 
-    local padding = UI.panelPadding
+    local padding = 0  -- Container edge padding (0 for full-bleed atlas backgrounds)
 
     -- ========================================================================
     -- HEADER
     -- ========================================================================
 
     local header = VE.UI:CreateSectionHeader(container, "Settings")
-    header:SetPoint("TOPLEFT", padding, -padding)
-    header:SetPoint("TOPRIGHT", -padding, -padding)
+    header:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
+    header:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
     -- ========================================================================
     -- SCROLLABLE SETTINGS CONTAINER
     -- ========================================================================
 
     local scrollContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    scrollContainer:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+    scrollContainer:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     scrollContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
     scrollContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -41,17 +41,11 @@ function VE.UI.Tabs:CreateConfig(parent)
     })
     container.scrollContainer = scrollContainer
 
-    -- Apply panel colors
-    local function ApplyPanelColors()
-        local C = GetColors()
-        local opacity = VE.Store.state.config.bgOpacity or 0.9
-        scrollContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3 * opacity)
-    end
+    -- Atlas background support
+    local ApplyPanelColors = VE.UI:AddAtlasBackground(scrollContainer)
     ApplyPanelColors()
 
-    local scrollFrame, scrollContent = VE.UI:CreateScrollFrame(scrollContainer)
-    scrollFrame:SetPoint("TOPLEFT", 0, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -2, 2)
+    local _, scrollContent = VE.UI:CreateScrollFrame(scrollContainer)
     container.scrollContent = scrollContent
 
     -- Settings panel is now inside scroll content
@@ -172,6 +166,13 @@ function VE.UI.Tabs:CreateConfig(parent)
                     VE.Minimap:UpdateVisibility()
                 end
             end
+
+            -- Special handling for dashboard button
+            if configKey == "showDashboardButton" then
+                if VE.UpdateDashboardButtonVisibility then
+                    VE:UpdateDashboardButtonVisibility()
+                end
+            end
         end)
 
         row.checkbox = checkbox
@@ -193,6 +194,9 @@ function VE.UI.Tabs:CreateConfig(parent)
 
     -- Minimap Button checkbox
     CreateCheckbox("Show Minimap Button", "showMinimapButton", "Toggle the minimap button visibility")
+
+    -- Dashboard Button checkbox
+    CreateCheckbox("Show Dashboard Button", "showDashboardButton", "Toggle the VE button in Housing Dashboard")
 
     -- Debug Mode checkbox
     CreateCheckbox("Debug Mode", "debug", "Show debug messages in chat")
@@ -473,8 +477,8 @@ function VE.UI.Tabs:CreateConfig(parent)
     -- ========================================================================
 
     local formulaHeader = VE.UI:CreateSectionHeader(settingsPanel, "House XP Formula (Guess!)")
-    formulaHeader:SetPoint("TOPLEFT", 12, yOffset)
-    formulaHeader:SetPoint("TOPRIGHT", -12, yOffset)
+    formulaHeader:SetPoint("TOPLEFT", 0, yOffset)
+    formulaHeader:SetPoint("TOPRIGHT", 0, yOffset)
     container.formulaHeader = formulaHeader
 
     yOffset = yOffset - 20

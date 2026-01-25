@@ -6,12 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.2 - Multi-House UX Improvements**
+## **What's New in v1.5.3 - Housing Theme Polish**
 
-- **Matches Blizzard Dashboard** - House dropdown now behaves like the Housing Dashboard
-- **View Without Switching** - Changing houses only changes view, not your active endeavor
-- **Set as Active Button** - Click to set a house as your active endeavor destination
-- **Seamless Experience** - All three tabs (Tasks, Rankings, Activity) show consistent state
+- **Enhanced Housing Theme** - Custom logo, wood-sign section headers, decorative foliage
+- **Improved Tab Styling** - Native Blizzard atlas textures for active/inactive tabs
+- **UI Refinements** - Dimmed title bar buttons, right-aligned house level, better spacing
+- **Theme Tooltip** - Now shows current and next theme when hovering
 
 *See CHANGELOG.txt for complete version history*
 
@@ -138,5 +138,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.2
+**Version:** 1.5.3
 **Game Version:** 12.0.0+ (Midnight)

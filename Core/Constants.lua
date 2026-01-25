@@ -184,7 +184,10 @@ VE.Constants.UI = {
     -- Main window
     mainWidth = 338,
     mainHeight = 480,
-    headerContentOffset = 120, -- Height of header area (title bar + tabs + header section); used for minimized height and content offset
+    titleBarHeight = 27,      -- Title bar height (increased 50% for Housing Theme)
+    tabHeight = 24,           -- Tab button height
+    headerSectionHeight = 73, -- Header section with season info, progress bar, house dropdown
+    headerContentOffset = 132, -- titleBarHeight + tabHeight + headerSectionHeight + 8px spacing = 132
 
     -- Row sizing
     rowHeight = 22,
@@ -199,16 +202,21 @@ VE.Constants.UI = {
     panelPadding = 5,
     sectionSpacing = 8,
     rowSpacing = 2,
+    sectionHeaderYOffset = 0, -- Y offset for section headers from top of container (0 = flush with top)
 
     -- Character selector
     charSelectorHeight = 24,
 
     -- Tab sizing
     tabWidth = 75,
-    tabHeight = 24,
 
     -- Transparency (0.6 = 60% opacity)
     windowAlpha = 0.6,
+
+    -- Set as Active button
+    setActiveButtonWidth = 120,
+    setActiveButtonHeight = 24,
+    setActiveButtonOffset = -12,
 }
 
 -- ============================================================================

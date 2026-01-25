@@ -101,16 +101,40 @@ function VE.UI:CreateMainFrame(name, title)
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
 
+    -- Atlas wood frame border (Housing Theme)
+    local borderFrame = CreateFrame("Frame", nil, frame)
+    borderFrame:SetAllPoints()  -- Align with window edges
+    borderFrame:SetFrameLevel(frame:GetFrameLevel() + 10)  -- Render on top
+    local borderTex = borderFrame:CreateTexture(nil, "OVERLAY")
+    borderTex:SetAllPoints()
+    borderTex:SetAtlas("housing-wood-frame")
+    borderTex:SetAlpha(1)
+    borderFrame.tex = borderTex
+    frame.borderFrame = borderFrame
+    -- Initial visibility based on theme
+    local Colors = GetScheme()
+    if Colors.atlas and Colors.atlas.windowBorder then
+        borderFrame:Show()
+    else
+        borderFrame:Hide()
+    end
+
     ApplyTheme(frame, "Window")
 
     -- Title Bar
     local Colors = GetScheme()
     local titleBar = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    titleBar:SetHeight(18)
+    titleBar:SetHeight(27)  -- 18 * 1.5 = 27 (50% taller)
     titleBar:SetPoint("TOPLEFT", 0, 0)
     titleBar:SetPoint("TOPRIGHT", 0, 0)
     titleBar:SetBackdrop(BACKDROP_BORDERLESS)
-    titleBar:SetBackdropColor(Colors.accent.r, Colors.accent.g, Colors.accent.b, Colors.accent.a * 0.3)
+    titleBar:SetBackdropColor(0, 0, 0, 0) -- Transparent, atlas provides background
+
+    -- Atlas background for title bar
+    local titleBg = titleBar:CreateTexture(nil, "BACKGROUND")
+    titleBg:SetAllPoints()
+    titleBg:SetAtlas("housing-dashboard-fillbar-bar-bg")
+    titleBar.atlasBg = titleBg
 
     local titleText = titleBar:CreateFontString(nil, "OVERLAY")
     titleText:SetPoint("CENTER", 0, 0)
@@ -120,24 +144,35 @@ function VE.UI:CreateMainFrame(name, title)
     frame.titleText = titleText
     titleBar.titleText = titleText
 
+    -- Logo texture for Housing Theme (replaces title text)
+    local titleLogo = titleBar:CreateTexture(nil, "OVERLAY")
+    titleLogo:SetTexture("Interface\\AddOns\\VamoosesEndeavors\\Textures\\title_logo.tga")
+    titleLogo:SetSize(180, 60)  -- Aspect ratio ~3:1, logo overlaps but transparent areas invisible
+    titleLogo:SetPoint("CENTER", 0, 0)
+    titleBar.titleLogo = titleLogo
+    -- Set initial visibility based on current theme
+    if Colors.atlas and Colors.atlas.titleBarBg then
+        titleLogo:Show()
+        titleText:Hide()
+    else
+        titleLogo:Hide()
+        titleText:Show()
+    end
+
     -- Register title bar for theming
     RegisterWidget(titleBar, "TitleBar")
 
-    -- Refresh Button (top left, borderless)
-    local refreshBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
-    refreshBtn:SetSize(50, 18)
-    refreshBtn:SetPoint("LEFT", 0, 0)
-    refreshBtn:SetBackdrop(BACKDROP_BORDERLESS)
-    refreshBtn:SetBackdropColor(Colors.button_normal.r, Colors.button_normal.g, Colors.button_normal.b, Colors.button_normal.a)
+    -- Refresh Button (top left, icon only)
+    local refreshBtn = CreateFrame("Button", nil, titleBar)
+    refreshBtn:SetSize(20, 20)
+    refreshBtn:SetPoint("LEFT", 4, 0)
     refreshBtn._scheme = Colors
 
-    local refreshText = refreshBtn:CreateFontString(nil, "OVERLAY")
-    refreshText:SetPoint("CENTER")
-    VE.Theme.ApplyFont(refreshText, Colors, "small")
-    refreshText:SetText("Refresh")
-    refreshText:SetTextColor(Colors.accent.r, Colors.accent.g, Colors.accent.b)
-    refreshBtn.text = refreshText
-    titleBar.refreshText = refreshText  -- Store for TitleBar skinner
+    local refreshIcon = refreshBtn:CreateTexture(nil, "ARTWORK")
+    refreshIcon:SetSize(18, 18)
+    refreshIcon:SetPoint("CENTER")
+    refreshIcon:SetAtlas("housefinder_neighborhood-party-sync-icon")
+    refreshBtn.icon = refreshIcon
     titleBar.refreshBtn = refreshBtn    -- Store for TitleBar skinner to update _scheme
 
     refreshBtn:SetScript("OnClick", function()
@@ -165,8 +200,9 @@ function VE.UI:CreateMainFrame(name, title)
     end)
 
     refreshBtn:SetScript("OnEnter", function(self)
-        local c = self._scheme or GetScheme()
-        self:SetBackdropColor(c.button_hover.r, c.button_hover.g, c.button_hover.b, c.button_hover.a)
+        if self.icon then
+            self.icon:SetVertexColor(1, 1, 1, 1)  -- Bright on hover
+        end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("Refresh", 1, 1, 1)
         GameTooltip:AddLine("Fetches latest endeavor data and rebuilds all UI elements", 0.7, 0.7, 0.7, true)
@@ -174,34 +210,46 @@ function VE.UI:CreateMainFrame(name, title)
     end)
 
     refreshBtn:SetScript("OnLeave", function(self)
-        local c = self._scheme or GetScheme()
-        self:SetBackdropColor(c.button_normal.r, c.button_normal.g, c.button_normal.b, c.button_normal.a)
+        if self.icon then
+            self.icon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dim when not hovered
+        end
         GameTooltip:Hide()
     end)
 
-    -- Minimize Button (collapses task list)
-    local minimizeBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
-    minimizeBtn:SetSize(16, 16)
-    minimizeBtn:SetPoint("RIGHT", -40, 0)
-    ApplyTheme(minimizeBtn, "Button")
+    -- Set initial dimmed state
+    refreshIcon:SetVertexColor(0.7, 0.7, 0.7, 1)
 
-    local minimizeIcon = minimizeBtn:CreateFontString(nil, "OVERLAY")
-    minimizeIcon:SetPoint("CENTER")
-    VE.Theme.ApplyFont(minimizeIcon, Colors, "small")
-    minimizeIcon:SetText("—")
-    minimizeIcon:SetTextColor(Colors.accent.r, Colors.accent.g, Colors.accent.b)
+    -- Minimize Button (collapses task list)
+    local minimizeBtn = CreateFrame("Button", nil, titleBar)
+    minimizeBtn:SetSize(16, 16)
+    minimizeBtn:SetPoint("RIGHT", -33, 0)
+
+    local minimizeIcon = minimizeBtn:CreateTexture(nil, "ARTWORK")
+    minimizeIcon:SetAllPoints()
+    minimizeIcon:SetAtlas("housing-floor-arrow-down-default")
+    minimizeIcon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dimmed when not hovered
     minimizeBtn.icon = minimizeIcon
-    titleBar.minimizeIcon = minimizeIcon  -- Store for TitleBar skinner
 
     frame.isMinimized = false
     frame.expandedHeight = UI.mainHeight
+
+    -- Helper to update atlas based on state
+    local function UpdateMinimizeAtlas(pressed)
+        if frame.isMinimized then
+            minimizeIcon:SetAtlas(pressed and "housing-floor-arrow-up-pressed" or "housing-floor-arrow-up-default")
+        else
+            minimizeIcon:SetAtlas(pressed and "housing-floor-arrow-down-pressed" or "housing-floor-arrow-down-default")
+        end
+    end
+
+    minimizeBtn:SetScript("OnMouseDown", function() UpdateMinimizeAtlas(true) end)
+    minimizeBtn:SetScript("OnMouseUp", function() UpdateMinimizeAtlas(false) end)
 
     minimizeBtn:SetScript("OnClick", function()
         frame.isMinimized = not frame.isMinimized
         if frame.isMinimized then
             -- Collapse to header only (title bar + tab bar + header section + stats row + fetch status)
             frame:SetHeight(UI.headerContentOffset)
-            minimizeIcon:SetText("+")
             -- Hide content area
             if frame.content then
                 frame.content:Hide()
@@ -209,15 +257,16 @@ function VE.UI:CreateMainFrame(name, title)
         else
             -- Expand to full height
             frame:SetHeight(frame.expandedHeight)
-            minimizeIcon:SetText("—")
             -- Show content area
             if frame.content then
                 frame.content:Show()
             end
         end
+        UpdateMinimizeAtlas(false)
     end)
 
     minimizeBtn:SetScript("OnEnter", function(self)
+        self.icon:SetVertexColor(1, 1, 1, 1)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         if frame.isMinimized then
             GameTooltip:AddLine("Expand", 1, 1, 1)
@@ -229,7 +278,8 @@ function VE.UI:CreateMainFrame(name, title)
         GameTooltip:Show()
     end)
 
-    minimizeBtn:SetScript("OnLeave", function()
+    minimizeBtn:SetScript("OnLeave", function(self)
+        self.icon:SetVertexColor(0.7, 0.7, 0.7, 1)
         GameTooltip:Hide()
     end)
 
@@ -238,13 +288,18 @@ function VE.UI:CreateMainFrame(name, title)
     -- Theme Toggle Button (next to close)
     local themeBtn = CreateFrame("Button", nil, titleBar)
     themeBtn:SetSize(18, 18)
-    themeBtn:SetPoint("RIGHT", -21, 0)
+    themeBtn:SetPoint("RIGHT", -15, 0)
 
     local themeIcon = themeBtn:CreateTexture(nil, "ARTWORK")
     themeIcon:SetAllPoints()
     themeIcon:SetAtlas("decor-ability-alterations-active")
+    themeIcon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dimmed when not hovered
     themeBtn.icon = themeIcon
     titleBar.themeIcon = themeIcon  -- Store reference
+
+    -- Pressed state
+    themeBtn:SetScript("OnMouseDown", function() themeIcon:SetAtlas("decor-ability-alterations-pressed") end)
+    themeBtn:SetScript("OnMouseUp", function() themeIcon:SetAtlas("decor-ability-alterations-active") end)
 
     -- Update icon (no-op now since it's an atlas)
     local function UpdateThemeIcon()
@@ -268,9 +323,12 @@ function VE.UI:CreateMainFrame(name, title)
 
     -- Helper to show theme tooltip
     local function ShowThemeTooltip(btn)
+        local currentTheme = VE.Constants:GetCurrentTheme()
+        local currentDisplayName = VE.Constants.ThemeDisplayNames[currentTheme] or currentTheme
         GameTooltip:SetOwner(btn, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("Change Theme", 1, 1, 1)
-        GameTooltip:AddLine("Next: " .. GetNextThemeDisplayName(), 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Current: " .. currentDisplayName, 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Next: " .. GetNextThemeDisplayName(), 0.5, 0.5, 0.5, true)
         GameTooltip:Show()
     end
 
@@ -294,28 +352,45 @@ function VE.UI:CreateMainFrame(name, title)
     end)
 
     themeBtn:SetScript("OnEnter", function(self)
+        self.icon:SetVertexColor(1, 1, 1, 1)
         ShowThemeTooltip(self)
     end)
 
-    themeBtn:SetScript("OnLeave", function()
+    themeBtn:SetScript("OnLeave", function(self)
+        self.icon:SetVertexColor(0.7, 0.7, 0.7, 1)
         GameTooltip:Hide()
     end)
 
     frame.themeBtn = themeBtn
     frame.UpdateThemeIcon = UpdateThemeIcon
 
-    -- Close Button (top right)
+    -- Close Button (top right) - Housing door icon
     local closeBtn = CreateFrame("Button", nil, titleBar)
     closeBtn:SetSize(18, 18)
     closeBtn:SetPoint("RIGHT", -1, 0)
 
     local closeIcon = closeBtn:CreateTexture(nil, "ARTWORK")
     closeIcon:SetAllPoints()
-    closeIcon:SetAtlas("decor-controls-exit-default")
+    closeIcon:SetAtlas("housing-floor-door-inactive")
+    closeIcon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dimmed when not hovered
     closeBtn.icon = closeIcon
     titleBar.closeIcon = closeIcon  -- Store for TitleBar skinner
 
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
+
+    closeBtn:SetScript("OnEnter", function(self)
+        self.icon:SetAtlas("housing-floor-door")
+        self.icon:SetVertexColor(1, 1, 1, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("Close", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+
+    closeBtn:SetScript("OnLeave", function(self)
+        self.icon:SetAtlas("housing-floor-door-inactive")
+        self.icon:SetVertexColor(0.7, 0.7, 0.7, 1)
+        GameTooltip:Hide()
+    end)
 
     frame.titleBar = titleBar
     frame.refreshBtn = refreshBtn
@@ -431,18 +506,20 @@ function VE.UI:CreateProgressBar(parent, options)
     local height = options.height or VE.Constants.UI.progressBarHeight
     local Colors = GetScheme()
 
-    local container = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local container = CreateFrame("Frame", nil, parent)
     container:SetSize(width, height)
-    container:SetBackdrop(BACKDROP_FLAT)
-    container:SetBackdropColor(Colors.panel.r, Colors.panel.g, Colors.panel.b, Colors.panel.a)
-    container:SetBackdropBorderColor(Colors.border.r, Colors.border.g, Colors.border.b, Colors.border.a)
 
-    -- Fill bar
+    -- Background texture (Blizzard atlas)
+    local bg = container:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetAtlas(Colors.atlas.fillBarBg)
+    container.bg = bg
+
+    -- Fill bar (Blizzard atlas) - centered within bg (25px fill in 34px bg = 2px inset)
     local fill = container:CreateTexture(nil, "ARTWORK")
-    fill:SetTexture("Interface\\Buttons\\WHITE8x8")
-    fill:SetVertexColor(Colors.endeavor.r, Colors.endeavor.g, Colors.endeavor.b, Colors.endeavor.a)
+    fill:SetAtlas(Colors.atlas.fillBarFill)
     fill:SetPoint("TOPLEFT", 2, -2)
-    fill:SetPoint("BOTTOMLEFT", 2, 2)
+    fill:SetPoint("BOTTOMLEFT", 2, 3)
     fill:SetWidth(1)
     container.fill = fill
 
@@ -477,20 +554,21 @@ function VE.UI:CreateProgressBar(parent, options)
         local C = GetScheme()
         local barWidth = self:GetWidth() - 4
         for i, milestone in ipairs(milestones) do
-            local diamond = self:CreateTexture(nil, "OVERLAY")
-            diamond:SetSize(VE.Constants.UI.milestoneSize, VE.Constants.UI.milestoneSize)
-            diamond:SetTexture("Interface\\COMMON\\Indicator-Yellow")
+            local pip = self:CreateTexture(nil, "OVERLAY")
+            pip:SetSize(VE.Constants.UI.milestoneSize, VE.Constants.UI.milestoneSize)
 
             local xPos = (milestone.threshold / max) * barWidth
-            diamond:SetPoint("CENTER", self, "LEFT", xPos + 2, 0)
+            pip:SetPoint("CENTER", self, "LEFT", xPos + 2, 0)
 
+            -- All themes use Blizzard pip atlases
             if milestone.reached then
-                diamond:SetVertexColor(C.success.r, C.success.g, C.success.b, C.success.a)
+                pip:SetAtlas(C.atlas.pipComplete)
             else
-                diamond:SetVertexColor(C.text_dim.r, C.text_dim.g, C.text_dim.b, C.text_dim.a)
+                pip:SetAtlas(C.atlas.pipIncomplete)
             end
+            pip:SetVertexColor(1, 1, 1, 1)
 
-            table.insert(self.milestones, diamond)
+            table.insert(self.milestones, pip)
         end
     end
 
@@ -521,22 +599,30 @@ function VE.UI:CreateTaskRow(parent, options)
     -- Checkbox/status indicator
     local status = row:CreateTexture(nil, "ARTWORK")
     status:SetSize(14, 14)
-    status:SetPoint("LEFT", 0, 0)
+    status:SetPoint("LEFT", 4, 0)  -- 4px left padding
     status:SetTexture("Interface\\COMMON\\Indicator-Gray")
     row.status = status
 
     -- Repeatable indicator (circular arrow icon - replaces status for repeatable tasks)
     local repeatIcon = row:CreateTexture(nil, "ARTWORK")
-    repeatIcon:SetSize(14, 14)
-    repeatIcon:SetPoint("LEFT", 0, 0)
+    repeatIcon:SetSize(20, 20)
+    repeatIcon:SetPoint("LEFT", 1, 0)  -- 4px left padding (-3 + 4 = 1)
     repeatIcon:SetAtlas("UI-RefreshButton")
     repeatIcon:Hide()
     row.repeatIcon = repeatIcon
 
+    -- Counter text inside repeat icon (shows times completed)
+    local repeatCount = row:CreateFontString(nil, "OVERLAY")
+    repeatCount:SetPoint("CENTER", repeatIcon, "CENTER", 1, 0)
+    repeatCount:SetFont(VE.Constants:GetFontFile(), 10, "OUTLINE")
+    repeatCount:SetTextColor(Colors.success.r, Colors.success.g, Colors.success.b)
+    repeatCount:Hide()
+    row.repeatCount = repeatCount
+
     -- Tracking checkmark (overlays on status/repeat icon when task is pinned)
     local trackMark = row:CreateTexture(nil, "OVERLAY", nil, 7)  -- High sublevel to draw on top
     trackMark:SetSize(14, 14)
-    trackMark:SetPoint("LEFT", 0, 0)
+    trackMark:SetPoint("LEFT", 4, 0)  -- 4px left padding
     trackMark:SetAtlas("common-icon-checkmark")
     trackMark:SetVertexColor(Colors.success.r, Colors.success.g, Colors.success.b)
     trackMark:Hide()
@@ -609,10 +695,19 @@ function VE.UI:CreateTaskRow(parent, options)
         if task.isRepeatable then
             self.status:Hide()
             self.repeatIcon:Show()
-            self.name:SetPoint("LEFT", self.repeatIcon, "RIGHT", 4, 0)
+            -- Show completion count inside icon
+            local count = task.timesCompleted or 0
+            if count > 0 then
+                self.repeatCount:SetText(tostring(count))
+                self.repeatCount:Show()
+            else
+                self.repeatCount:Hide()
+            end
+            self.name:SetPoint("LEFT", self.repeatIcon, "RIGHT", 2, 0)
             self.name:SetPoint("RIGHT", -100, 0)
         else
             self.repeatIcon:Hide()
+            self.repeatCount:Hide()
             self.status:Show()
             self.name:SetPoint("LEFT", self.status, "RIGHT", 6, 0)
             self.name:SetPoint("RIGHT", -100, 0)
@@ -860,25 +955,115 @@ function VE.UI:CreateSectionHeader(parent, text)
     local header = CreateFrame("Frame", nil, parent)
     header:SetHeight(18)
 
+    -- Background texture (atlas for Housing Theme)
+    local bg = header:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    if Colors.atlas and Colors.atlas.sectionHeaderBg then
+        bg:SetAtlas(Colors.atlas.sectionHeaderBg)
+    else
+        bg:SetTexture("Interface\\Buttons\\WHITE8x8")
+        bg:SetVertexColor(Colors.panel.r, Colors.panel.g, Colors.panel.b, 0.3)
+    end
+    header.bg = bg
+
+    -- Border for non-atlas themes (1px edge)
+    local border = header:CreateTexture(nil, "BORDER")
+    border:SetAllPoints()
+    border:SetTexture("Interface\\Buttons\\WHITE8x8")
+    border:SetVertexColor(Colors.border.r, Colors.border.g, Colors.border.b, 0.5)
+    header.border = border
+
+    -- Inner background (slightly inset for border effect)
+    local innerBg = header:CreateTexture(nil, "ARTWORK", nil, -1)
+    innerBg:SetPoint("TOPLEFT", 1, -1)
+    innerBg:SetPoint("BOTTOMRIGHT", -1, 1)
+    innerBg:SetTexture("Interface\\Buttons\\WHITE8x8")
+    innerBg:SetVertexColor(Colors.panel.r, Colors.panel.g, Colors.panel.b, 0.3)
+    header.innerBg = innerBg
+
+    -- Hide border elements for atlas themes
+    if Colors.atlas and Colors.atlas.sectionHeaderBg then
+        border:Hide()
+        innerBg:Hide()
+    end
+
+    -- Drop shadow (rendered behind main label)
+    local shadow = header:CreateFontString(nil, "ARTWORK")
+    shadow:SetPoint("CENTER", 1, 1)  -- Offset down-right for shadow effect
+    shadow:SetJustifyH("CENTER")
+    VE.Theme.ApplyFont(shadow, Colors, "small")
+    shadow:SetText(text)
+    shadow:SetTextColor(0, 0, 0, 0.6)  -- Black with transparency
+    header.shadow = shadow
+
     local label = header:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("LEFT", 0, 0)
+    label:SetPoint("CENTER", 0, 2)  -- 2px higher
+    label:SetJustifyH("CENTER")
     VE.Theme.ApplyFont(label, Colors, "small")
     label:SetText(text)
     label:SetTextColor(Colors.accent.r, Colors.accent.g, Colors.accent.b)
     header.label = label
 
     local line = header:CreateTexture(nil, "ARTWORK")
-    line:SetHeight(1)
+    line:SetHeight(8)
     line:SetPoint("LEFT", label, "RIGHT", 8, 0)
-    line:SetPoint("RIGHT", 0, 0)
-    line:SetTexture("Interface\\Buttons\\WHITE8x8")
-    line:SetVertexColor(Colors.text_dim.r, Colors.text_dim.g, Colors.text_dim.b, Colors.text_dim.a * 0.5)
+    line:SetPoint("RIGHT", -4, 0)
+    line:SetAtlas("housing-bulletinboard-list-header-decorative-line")
+    line:Hide()  -- Hidden by default (centered text doesn't use line)
     header.line = line
+
+    -- Decorative foliage (Housing Theme only) - spills below header
+    -- Layer order: BACKGROUND (bg) → BORDER (foliage) → OVERLAY (text/icons)
+    local foliageLeft = header:CreateTexture(nil, "BORDER")
+    foliageLeft:SetAtlas("housing-decorative-foliage-left")
+    foliageLeft:SetPoint("BOTTOMLEFT", 0, -8)  -- Anchor at bottom, spills down
+    foliageLeft:SetSize(32, 32)
+    header.foliageLeft = foliageLeft
+
+    local foliageRight = header:CreateTexture(nil, "BORDER")
+    foliageRight:SetAtlas("housing-decorative-foliage-right")
+    foliageRight:SetPoint("BOTTOMRIGHT", 0, -8)  -- Anchor at bottom, spills down
+    foliageRight:SetSize(32, 32)
+    header.foliageRight = foliageRight
+
+    -- Only show foliage for Housing Theme
+    if not (Colors.atlas and Colors.atlas.sectionHeaderBg) then
+        foliageLeft:Hide()
+        foliageRight:Hide()
+    end
 
     -- Register with theme engine
     RegisterWidget(header, "SectionHeader")
 
     return header
+end
+
+-- ============================================================================
+-- ATLAS BACKGROUND HELPER
+-- ============================================================================
+
+-- Adds atlas background support to a BackdropTemplate frame
+-- Returns a function to apply colors based on current theme
+function VE.UI:AddAtlasBackground(frame)
+    local atlasBg = frame:CreateTexture(nil, "BACKGROUND")
+    atlasBg:SetAllPoints()
+    frame.atlasBg = atlasBg
+
+    -- Return the apply function
+    return function(opacityMultiplier)
+        local C = GetScheme()
+        opacityMultiplier = opacityMultiplier or 0.3
+        if C.atlas and C.atlas.taskListBg then
+            frame:SetBackdrop(nil)
+            atlasBg:SetAtlas(C.atlas.taskListBg)
+            atlasBg:SetAlpha(1)
+            atlasBg:Show()
+        else
+            frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+            frame:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * opacityMultiplier)
+            atlasBg:Hide()
+        end
+    end
 end
 
 -- ============================================================================
@@ -889,8 +1074,8 @@ function VE.UI:CreateScrollFrame(parent)
     local Colors = GetScheme()
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 0, 0)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -1, 0)
+    scrollFrame:SetPoint("TOPLEFT", 0, -2)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -6, 2)  -- -6 right inset leaves room for 8px scrollbar flush with container edge
 
     -- Style scrollbar
     local scrollBar = scrollFrame.ScrollBar
@@ -899,10 +1084,16 @@ function VE.UI:CreateScrollFrame(parent)
 
         local thumb = scrollBar:GetThumbTexture()
         if thumb then
-            thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
-            thumb:SetVertexColor(Colors.accent.r, Colors.accent.g, Colors.accent.b, 1)
-            thumb:SetSize(6, 40)
+            if Colors.atlas and Colors.atlas.scrollThumb then
+                thumb:SetAtlas(Colors.atlas.scrollThumb)
+                thumb:SetVertexColor(1, 1, 1, 1)
+            else
+                thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+                thumb:SetVertexColor(Colors.accent.r, Colors.accent.g, Colors.accent.b, 1)
+            end
+            thumb:SetSize(8, 40)
         end
+        scrollBar.thumb = thumb  -- Store reference for theming
 
         -- Hide buttons
         if scrollBar.ScrollUpButton then
@@ -926,6 +1117,84 @@ function VE.UI:CreateScrollFrame(parent)
     RegisterWidget(scrollFrame, "ScrollFrame")
 
     return scrollFrame, content
+end
+
+-- ============================================================================
+-- SET AS ACTIVE BUTTON (for non-active house state)
+-- ============================================================================
+
+function VE.UI:CreateSetAsActiveButton(parent, anchorTo, options)
+    options = options or {}
+    local Colors = GetScheme()
+    local UI = VE.Constants.UI
+
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(UI.setActiveButtonWidth, UI.setActiveButtonHeight)
+    btn:SetPoint("TOP", anchorTo, "BOTTOM", 0, UI.setActiveButtonOffset)
+    btn:SetText("Set as Active")
+
+    btn:SetScript("OnClick", function()
+        if options.onBeforeClick then
+            options.onBeforeClick()
+        end
+        local tracker = VE.EndeavorTracker
+        if tracker then
+            tracker:SetAsActiveEndeavor()
+        end
+    end)
+
+    -- Apply font styling
+    local fs = btn:GetFontString()
+    if fs and VE.Theme and VE.Theme.ApplyFont then
+        VE.Theme.ApplyFont(fs, Colors)
+    end
+
+    RegisterWidget(btn, "Button")
+    return btn
+end
+
+-- ============================================================================
+-- EMPTY STATE VIEW (for tabs with no data)
+-- ============================================================================
+
+function VE.UI:CreateEmptyStateView(parent, options)
+    options = options or {}
+    local Colors = GetScheme()
+
+    local container = CreateFrame("Frame", nil, parent)
+    container:SetAllPoints()
+
+    -- Empty text
+    local text = container:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("CENTER", 0, 20)
+    if VE.Theme and VE.Theme.ApplyFont then
+        VE.Theme.ApplyFont(text, Colors)
+    end
+    text:SetText(options.message or "No data available.")
+    container.text = text
+    RegisterWidget(text, "Text")
+
+    -- Optional Set as Active button
+    if options.showSetActiveButton then
+        local btn = self:CreateSetAsActiveButton(container, text, {
+            onBeforeClick = options.onSetActiveClick
+        })
+        container.button = btn
+    end
+
+    function container:SetMessage(msg)
+        self.text:SetText(msg)
+    end
+
+    function container:ShowButton()
+        if self.button then self.button:Show() end
+    end
+
+    function container:HideButton()
+        if self.button then self.button:Hide() end
+    end
+
+    return container
 end
 
 -- ============================================================================

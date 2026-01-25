@@ -11,6 +11,7 @@ local Tracker = VE.HousingTracker
 
 -- Frame for event handling
 Tracker.frame = CreateFrame("Frame")
+Tracker.couponUpdateTimer = nil  -- Debounce timer for currency updates
 
 -- ============================================================================
 -- INITIALIZATION
@@ -54,7 +55,14 @@ function Tracker:OnEvent(event, ...)
         self:RequestHouseInfo()
 
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
-        self:UpdateCoupons()
+        -- Debounce currency updates (per CLAUDE.md Rule 9: 0.2-0.5s)
+        if self.couponUpdateTimer then
+            self.couponUpdateTimer:Cancel()
+        end
+        self.couponUpdateTimer = C_Timer.NewTimer(0.2, function()
+            self.couponUpdateTimer = nil
+            self:UpdateCoupons()
+        end)
     end
 end
 

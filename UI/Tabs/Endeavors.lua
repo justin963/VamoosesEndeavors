@@ -45,15 +45,15 @@ function VE.UI.Tabs:CreateEndeavors(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
 
-    local padding = UI.panelPadding
+    local padding = 0  -- Container edge padding (0 for full-bleed atlas backgrounds)
 
     -- ========================================================================
     -- TASKS HEADER
     -- ========================================================================
 
     local tasksHeader = VE.UI:CreateSectionHeader(container, "Endeavor Tasks")
-    tasksHeader:SetPoint("TOPLEFT", padding, 0)
-    tasksHeader:SetPoint("TOPRIGHT", -padding, 0)
+    tasksHeader:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
+    tasksHeader:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
     -- Sort buttons on header row (right side)
     local function CreateSortButton(parent, column, xOffset)
@@ -118,12 +118,12 @@ function VE.UI.Tabs:CreateEndeavors(parent)
         return btn
     end
 
-    -- XP sort button (centered over points badge: 32px wide, right edge at -30, center at -46)
-    local sortXpBtn = CreateSortButton(tasksHeader, "xp", -38)
+    -- XP sort button (centered over points badge: 32px wide at RIGHT -34, center = -34 - 16 = -50)
+    local sortXpBtn = CreateSortButton(tasksHeader, "xp", -50)
     container.sortXpBtn = sortXpBtn
 
-    -- Coupons sort button (centered over coupon badge: 26px wide, right edge at 0, center at -13)
-    local sortCouponsBtn = CreateSortButton(tasksHeader, "coupons", -5)
+    -- Coupons sort button (centered over coupon badge: 26px wide at RIGHT -4, center = -4 - 13 = -17)
+    local sortCouponsBtn = CreateSortButton(tasksHeader, "coupons", -17)
     container.sortCouponsBtn = sortCouponsBtn
 
     -- Update icons to reflect loaded state
@@ -135,24 +135,19 @@ function VE.UI.Tabs:CreateEndeavors(parent)
     -- ========================================================================
 
     local taskListContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    taskListContainer:SetPoint("TOPLEFT", tasksHeader, "BOTTOMLEFT", 0, -2)
-    taskListContainer:SetPoint("BOTTOMRIGHT", 0, padding)
+    taskListContainer:SetPoint("TOPLEFT", tasksHeader, "BOTTOMLEFT", 4, 0)
+    taskListContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
     taskListContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = nil,
     })
     container.taskListContainer = taskListContainer
 
-    -- Apply container colors
-    local function ApplyContainerColors()
-        local C = GetColors()
-        taskListContainer:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3)
-    end
+    -- Atlas background support
+    local ApplyContainerColors = VE.UI:AddAtlasBackground(taskListContainer)
     ApplyContainerColors()
 
-    local scrollFrame, scrollContent = VE.UI:CreateScrollFrame(taskListContainer)
-    scrollFrame:SetPoint("TOPLEFT", 0, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -6, 2)
+    local _, scrollContent = VE.UI:CreateScrollFrame(taskListContainer)
     container.scrollContent = scrollContent
 
     -- Pool of task rows
@@ -162,13 +157,23 @@ function VE.UI.Tabs:CreateEndeavors(parent)
     -- UPDATE FUNCTION
     -- ========================================================================
 
-    function container:Update()
+    function container:Update(forceUpdate)
         local state = VE.Store:GetState()
         -- Update tasks list only (header is updated by MainFrame)
-        self:UpdateTaskList(state.tasks)
+        self:UpdateTaskList(state.tasks, forceUpdate)
     end
 
-    function container:UpdateTaskList(tasks)
+    function container:UpdateTaskList(tasks, forceUpdate)
+        -- Skip rebuild if nothing changed (optimization)
+        local taskCount = tasks and #tasks or 0
+        local fetchState = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus and VE.EndeavorTracker.fetchStatus.state
+        local sortKey = (sortState.column or "none") .. "-" .. (sortState.direction or "none")
+        local cacheKey = taskCount .. "-" .. (fetchState or "nil") .. "-" .. sortKey
+        if not forceUpdate and self.lastTaskCacheKey and self.lastTaskCacheKey == cacheKey then
+            return
+        end
+        self.lastTaskCacheKey = cacheKey
+
         -- Hide all existing rows
         for _, row in ipairs(self.taskRows) do
             row:Hide()
@@ -189,35 +194,18 @@ function VE.UI.Tabs:CreateEndeavors(parent)
 
             if isFetching or self.setActiveClicked then
                 self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
-                -- Hide button while fetching or after clicking set active
-                if self.setActiveButton then
-                    self.setActiveButton:Hide()
-                end
+                if self.setActiveButton then self.setActiveButton:Hide() end
             else
                 self.emptyText:SetText("No endeavor tasks found.\nThis house is not set as your active endeavor.")
-
-                -- Create "Set as Active" button if needed
+                -- Create button via factory (once)
                 if not self.setActiveButton then
-                    self.setActiveButton = CreateFrame("Button", nil, self.scrollContent, "UIPanelButtonTemplate")
-                    self.setActiveButton:SetSize(120, 24)
-                    self.setActiveButton:SetPoint("TOP", self.emptyText, "BOTTOM", 0, -12)
-                    self.setActiveButton:SetText("Set as Active")
-                    self.setActiveButton:SetScript("OnClick", function()
-                        self.setActiveClicked = true  -- Prevent button from re-showing
-                        if self.setActiveButton then
-                            self.setActiveButton:Hide()
+                    self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText, {
+                        onBeforeClick = function()
+                            self.setActiveClicked = true
+                            if self.setActiveButton then self.setActiveButton:Hide() end
+                            self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
                         end
-                        self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
-                        local tracker = VE.EndeavorTracker
-                        if tracker then
-                            tracker:SetAsActiveEndeavor()
-                        end
-                    end)
-                end
-                -- Style button text
-                local fs = self.setActiveButton:GetFontString()
-                if fs then
-                    VE.Theme.ApplyFont(fs, colors)
+                    })
                 end
                 self.setActiveButton:Show()
             end
@@ -264,7 +252,7 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             end)
         end
 
-        local yOffset = 0
+        local yOffset = 2 -- Top padding for first row
         local rowHeight = VE.Constants.UI.taskRowHeight
         local rowSpacing = VE.Constants.UI.rowSpacing
 

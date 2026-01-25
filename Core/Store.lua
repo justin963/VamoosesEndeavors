@@ -10,6 +10,7 @@ local DEFAULT_STATE = {
     config = {
         debug = false,
         showMinimapButton = true,
+        showDashboardButton = true,
         theme = "housingtheme",  -- "dark", "light", "housingtheme", etc.
         fontFamily = "ARIALN",  -- FRIZQT__, ARIALN, skurri, MORPHEUS
         fontScale = 0,  -- -4 to +8 offset applied to all font sizes
@@ -148,6 +149,7 @@ function VE.Store:SaveToSavedVariables()
     VE_DB.config = {
         debug = self.state.config.debug,
         showMinimapButton = self.state.config.showMinimapButton,
+        showDashboardButton = self.state.config.showDashboardButton,
         theme = self.state.config.theme,
         fontFamily = self.state.config.fontFamily,
         fontScale = self.state.config.fontScale,

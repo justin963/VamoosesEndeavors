@@ -60,9 +60,22 @@ function VE:CreateMainWindow()
     local tabBar = CreateFrame("Frame", nil, frame)
     local uiConsts = VE.Constants.UI or {}
     tabBar:SetHeight(uiConsts.tabHeight or 24)
-    tabBar:SetPoint("TOPLEFT", 0, -16)
-    tabBar:SetPoint("TOPRIGHT", 0, -16)
+    tabBar:SetPoint("TOPLEFT", 0, -uiConsts.titleBarHeight)
+    tabBar:SetPoint("TOPRIGHT", 0, -uiConsts.titleBarHeight)
     frame.tabBar = tabBar
+
+    -- Tab bar background (atlas for Housing Theme)
+    local tabBarBg = tabBar:CreateTexture(nil, "BACKGROUND")
+    tabBarBg:SetAllPoints()
+    local Colors = VE.Constants:GetThemeColors()
+    if Colors.atlas and Colors.atlas.tabSectionBg then
+        tabBarBg:SetAtlas(Colors.atlas.tabSectionBg)
+    else
+        tabBarBg:SetTexture("Interface\\Buttons\\WHITE8x8")
+        tabBarBg:SetVertexColor(0, 0, 0, 0)  -- Transparent for non-atlas themes
+    end
+    tabBar.bg = tabBarBg
+    VE.Theme:Register(tabBar, "TabBar")
 
     -- Create tab buttons (via factory method with Theme Engine registration)
     -- Calculate equal tab width: (window width - 2 * padding) / num tabs
@@ -152,14 +165,21 @@ function VE:CreateMainWindow()
     local padding = UI.panelPadding
 
     local headerSection = CreateFrame("Frame", nil, frame)
-    headerSection:SetHeight(70)
-    headerSection:SetPoint("TOPLEFT", padding, -38)
-    headerSection:SetPoint("TOPRIGHT", -padding, -38)
+    headerSection:SetHeight(UI.headerSectionHeight)
+    local headerOffset = -(UI.titleBarHeight + UI.tabHeight)
+    headerSection:SetPoint("TOPLEFT", padding, headerOffset)
+    headerSection:SetPoint("TOPRIGHT", -padding, headerOffset)
     frame.headerSection = headerSection
+
+    -- Atlas background will be positioned after rows are created
+    local headerBg = headerSection:CreateTexture(nil, "BACKGROUND")
+    headerBg:SetAtlas("housing-basic-panel--stone-background")
+    headerSection.atlasBg = headerBg
+    VE.Theme:Register(headerSection, "HeaderSection")
 
     -- Season name (top left)
     local seasonName = headerSection:CreateFontString(nil, "OVERLAY")
-    seasonName:SetPoint("TOPLEFT", 0, -2)
+    seasonName:SetPoint("TOPLEFT", 2, -2)
     VE.Theme.ApplyFont(seasonName, C)
     seasonName:SetTextColor(C.text.r, C.text.g, C.text.b)
     seasonName._colorType = "text"
@@ -195,8 +215,8 @@ function VE:CreateMainWindow()
     -- House icon (left side)
     local houseIcon = dropdownRow:CreateTexture(nil, "ARTWORK")
     houseIcon:SetSize(16, 16)
-    houseIcon:SetPoint("LEFT", 0, 0)
-    houseIcon:SetAtlas("housing-map-plot-player-house-highlight")
+    houseIcon:SetPoint("LEFT", 3, 0)
+    houseIcon:SetAtlas("housefinder_main-icon")
     frame.houseIcon = houseIcon
 
     -- House selector dropdown (after icon) - uses custom styled dropdown
@@ -216,8 +236,8 @@ function VE:CreateMainWindow()
     -- Note: houseLevelText uses inline color codes, so we don't register it with HeaderText
     local houseLevelText = dropdownRow:CreateFontString(nil, "OVERLAY")
     houseLevelText:SetPoint("LEFT", houseDropdown, "RIGHT", 8, 0)
-    houseLevelText:SetPoint("RIGHT", 0, 0)
-    houseLevelText:SetJustifyH("LEFT")
+    houseLevelText:SetPoint("RIGHT", -4, 0)
+    houseLevelText:SetJustifyH("RIGHT")
     VE.Theme.ApplyFont(houseLevelText, C, "small")
     houseLevelText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     houseLevelText:SetText("")
@@ -239,8 +259,8 @@ function VE:CreateMainWindow()
     -- ========================================================================
     local statsRow = CreateFrame("Frame", nil, headerSection)
     statsRow:SetHeight(16)
-    statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 0, -4)
-    statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", 0, -4)
+    statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", -4, -4)
+    statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", -4, -4)
 
     -- Contribution value (right-most)
     local xpValue = statsRow:CreateFontString(nil, "OVERLAY")
@@ -289,6 +309,11 @@ function VE:CreateMainWindow()
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("House XP Earned", 1, 1, 1)
         GameTooltip:AddLine("Estimated total from completed tasks.", 0.7, 0.7, 0.7, true)
+        if frame.houseXpCapped then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("You may be capped!", colors.warning.r, colors.warning.g, colors.warning.b)
+            GameTooltip:AddLine("XP gains stop after ~1000 per week.", 0.7, 0.7, 0.7, true)
+        end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Formula: factor = 0.96 - 0.10 * n", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("n=2: x0.76, n=3: x0.66, n=4: x0.56...", 0.7, 0.7, 0.7)
@@ -313,6 +338,10 @@ function VE:CreateMainWindow()
     couponsIcon:SetSize(14, 14)
     couponsIcon:SetPoint("RIGHT", couponsText, "LEFT", -4, 0)
     frame.couponsIcon = couponsIcon
+
+    -- Position header background to cover entire headerSection
+    headerBg:SetPoint("TOPLEFT", headerSection, "TOPLEFT", -padding, 0)
+    headerBg:SetPoint("BOTTOMRIGHT", statsRow, "BOTTOMRIGHT", padding, -2)
 
     -- Update house dropdown when house list changes
     function frame:UpdateHouseDropdown(houseList, selectedIndex)
@@ -544,6 +573,17 @@ function VE:CreateMainWindow()
             end
         end
         self.houseXpText:SetText(tostring(houseXpEarned))
+        -- Grey out if potentially capped (>1000 XP)
+        local colors = VE.Constants:GetThemeColors()
+        if houseXpEarned > 1000 then
+            self.houseXpText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            self.houseXpText._colorType = "text_dim"  -- Update for theme engine
+            self.houseXpCapped = true
+        else
+            self.houseXpText:SetTextColor(colors.endeavor.r, colors.endeavor.g, colors.endeavor.b)
+            self.houseXpText._colorType = "endeavor"  -- Update for theme engine
+            self.houseXpCapped = false
+        end
     end
 
     -- ========================================================================

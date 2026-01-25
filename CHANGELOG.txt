@@ -2,6 +2,27 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.3 (Released January 2026)
+--------------------------------------------------------------------------------
+
+HOUSING THEME ENHANCEMENTS:
+- Custom logo texture in title bar (replaces text for Housing Theme)
+- Section headers use housing-woodsign atlas background
+- Decorative foliage on section header corners (left and right)
+- Scrollbar handles use decor-abilitybar-divider atlas
+- Section headers now full-width (removed horizontal padding)
+
+UI IMPROVEMENTS:
+- Sort icons now centered over their XP/Coupon boxes in Endeavors tab
+- Removed pip icon from Leaderboard section header
+- Added sectionHeaderYOffset constant for consistent vertical positioning
+- Correct frame layer order: background → foliage → text/icons
+- Title bar buttons (theme, minimize) now dimmed when not hovered (matches close)
+- House level/XP text right-aligned in header
+- Refined header element positioning and spacing
+
+--------------------------------------------------------------------------------
+
 Version 1.5.2 (Released January 2026)
 --------------------------------------------------------------------------------
 

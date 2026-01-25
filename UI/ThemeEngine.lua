@@ -195,6 +195,15 @@ VE.Theme.Skinners = {
             f.title:SetTextColor(c.text_header.r, c.text_header.g, c.text_header.b, c.text_header.a)
             ApplyFont(f.title, c)
         end
+        -- Toggle atlas wood frame border
+        if f.borderFrame then
+            if c.atlas and c.atlas.windowBorder then
+                f.borderFrame.tex:SetAtlas(c.atlas.windowBorder)
+                f.borderFrame:Show()
+            else
+                f.borderFrame:Hide()
+            end
+        end
     end,
 
     -- Panel skinner
@@ -208,7 +217,7 @@ VE.Theme.Skinners = {
 
     -- Button skinner
     Button = function(b, c)
-        if b:GetBackdrop() then
+        if b.GetBackdrop and b:GetBackdrop() then
             b:SetBackdropColor(c.button_normal.r, c.button_normal.g, c.button_normal.b, c.button_normal.a)
             b:SetBackdropBorderColor(c.border.r, c.border.g, c.border.b, c.border.a)
         end
@@ -241,24 +250,63 @@ VE.Theme.Skinners = {
 
     -- Section Header skinner
     SectionHeader = function(f, c)
+        local isAtlasTheme = c.atlas and c.atlas.sectionHeaderBg
+        -- Background (atlas for Housing Theme)
+        if f.bg then
+            if isAtlasTheme then
+                f.bg:SetAtlas(c.atlas.sectionHeaderBg)
+                f.bg:SetVertexColor(1, 1, 1, 1)
+                f.bg:Show()
+            else
+                f.bg:Hide()  -- Hide main bg, use border + innerBg instead
+            end
+        end
+        -- Border and inner bg for non-atlas themes
+        if f.border then
+            if isAtlasTheme then
+                f.border:Hide()
+            else
+                f.border:SetVertexColor(c.border.r, c.border.g, c.border.b, 0.5)
+                f.border:Show()
+            end
+        end
+        if f.innerBg then
+            if isAtlasTheme then
+                f.innerBg:Hide()
+            else
+                f.innerBg:SetVertexColor(c.panel.r, c.panel.g, c.panel.b, 0.3)
+                f.innerBg:Show()
+            end
+        end
+        if f.shadow then
+            ApplyFont(f.shadow, c)
+            -- Shadow color stays black
+        end
         if f.label then
             f.label:SetTextColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a)
             ApplyFont(f.label, c)
         end
         if f.line then
-            f.line:SetVertexColor(c.text_dim.r, c.text_dim.g, c.text_dim.b, c.text_dim.a * 0.5)
+            f.line:Hide()  -- Line hidden (centered text doesn't use line)
+        end
+        -- Decorative foliage (Housing Theme only)
+        if f.foliageLeft then
+            if isAtlasTheme then f.foliageLeft:Show() else f.foliageLeft:Hide() end
+        end
+        if f.foliageRight then
+            if isAtlasTheme then f.foliageRight:Show() else f.foliageRight:Hide() end
         end
     end,
 
-    -- Progress Bar skinner
+    -- Progress Bar skinner (all themes use atlas)
     ProgressBar = function(f, c)
-        if f:GetBackdrop() then
-            local opacity = GetBgOpacity()
-            f:SetBackdropColor(c.panel.r, c.panel.g, c.panel.b, c.panel.a * opacity)
-            f:SetBackdropBorderColor(c.border.r, c.border.g, c.border.b, c.border.a)
+        if f.bg then
+            f.bg:SetAtlas(c.atlas.fillBarBg)
+            f.bg:SetVertexColor(1, 1, 1, 1)
         end
         if f.fill then
-            f.fill:SetVertexColor(c.endeavor.r, c.endeavor.g, c.endeavor.b, c.endeavor.a)
+            f.fill:SetAtlas(c.atlas.fillBarFill)
+            f.fill:SetVertexColor(1, 1, 1, 1)
         end
         if f.text then
             f.text:SetTextColor(c.text.r, c.text.g, c.text.b, c.text.a)
@@ -349,7 +397,13 @@ VE.Theme.Skinners = {
         if scrollBar then
             local thumb = scrollBar:GetThumbTexture()
             if thumb then
-                thumb:SetVertexColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a)
+                if c.atlas and c.atlas.scrollThumb then
+                    thumb:SetAtlas(c.atlas.scrollThumb)
+                    thumb:SetVertexColor(1, 1, 1, 1)
+                else
+                    thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+                    thumb:SetVertexColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a)
+                end
             end
         end
     end,
@@ -367,39 +421,67 @@ VE.Theme.Skinners = {
 
     -- Title Bar skinner (borderless, Atlas-aware)
     TitleBar = function(f, c)
-        -- Handle Atlas header texture if theme has it
-        if c.atlas and c.atlas.headerBar then
-            ApplyAtlasHeader(f, c.atlas.headerBar)
+        -- Handle Atlas background texture
+        if c.atlas and c.atlas.titleBarBg then
+            if f.atlasBg then
+                f.atlasBg:SetAtlas(c.atlas.titleBarBg)
+                f.atlasBg:SetVertexColor(1, 1, 1, 1)
+                f.atlasBg:Show()
+            end
             if f:GetBackdrop() then
                 f:SetBackdropColor(0, 0, 0, 0) -- Transparent, let Atlas show through
             end
         else
-            HideAtlasTextures(f)
+            if f.atlasBg then
+                f.atlasBg:SetTexture("Interface\\Buttons\\WHITE8x8")
+                f.atlasBg:SetVertexColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a * 0.3)
+            end
             if f:GetBackdrop() then
                 f:SetBackdropColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a * 0.3)
             end
         end
         -- For Atlas themes, use text_header (gold) instead of accent for title
-        local titleColor = (c.atlas and c.atlas.headerBar) and c.text_header or c.accent
+        local titleColor = (c.atlas and c.atlas.titleBarBg) and c.text_header or c.accent
+        local isHousingTheme = c.atlas and c.atlas.titleBarBg
+        -- Toggle between logo (Housing Theme) and text (other themes)
+        if f.titleLogo then
+            if isHousingTheme then
+                f.titleLogo:Show()
+            else
+                f.titleLogo:Hide()
+            end
+        end
         if f.titleText then
-            f.titleText:SetTextColor(titleColor.r, titleColor.g, titleColor.b, titleColor.a)
-            ApplyFont(f.titleText, c)
+            if isHousingTheme and f.titleLogo then
+                f.titleText:Hide()  -- Hide text when logo is shown
+            else
+                f.titleText:Show()
+                f.titleText:SetTextColor(titleColor.r, titleColor.g, titleColor.b, titleColor.a)
+                ApplyFont(f.titleText, c)
+            end
         end
         -- Refresh button (update _scheme for hover scripts)
         if f.refreshBtn then
             f.refreshBtn._scheme = c
-            f.refreshBtn:SetBackdropColor(c.button_normal.r, c.button_normal.g, c.button_normal.b, c.button_normal.a)
-        end
-        -- Title bar button texts (use titleColor for Atlas themes)
-        if f.refreshText then
-            f.refreshText:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
-            ApplyFont(f.refreshText, c)
         end
         if f.minimizeIcon then
             f.minimizeIcon:SetTextColor(titleColor.r, titleColor.g, titleColor.b)
             ApplyFont(f.minimizeIcon, c)
         end
         -- themeIcon and closeIcon are atlas textures, no color update needed
+    end,
+
+    -- Tab Bar background skinner (the strip behind all tabs)
+    TabBar = function(f, c)
+        if f.bg then
+            if c.atlas and c.atlas.tabSectionBg then
+                f.bg:SetAtlas(c.atlas.tabSectionBg)
+                f.bg:SetVertexColor(1, 1, 1, 1)
+            else
+                f.bg:SetTexture("Interface\\Buttons\\WHITE8x8")
+                f.bg:SetVertexColor(0, 0, 0, 0)  -- Transparent for non-atlas themes
+            end
+        end
     end,
 
     -- Tab Button skinner (Atlas-aware with 3-part left/center/right)
@@ -434,7 +516,7 @@ VE.Theme.Skinners = {
             local centerAtlas = btn.isActive and c.atlas.tabActive or c.atlas.tabInactive
             local rightAtlas = btn.isActive and c.atlas.tabActiveRight or c.atlas.tabInactiveRight
             btn._atlasTabLeft:SetAtlas(leftAtlas or centerAtlas, true)
-            btn._atlasTabCenter:SetAtlas(centerAtlas, true)
+            btn._atlasTabCenter:SetAtlas(centerAtlas, false)  -- false = stretch to fill anchored area
             btn._atlasTabRight:SetAtlas(rightAtlas or centerAtlas, true)
             -- Flip vertically (Blizzard tabs are upside-down relative to our layout)
             btn._atlasTabLeft:SetTexCoord(0, 1, 1, 0)
@@ -491,5 +573,19 @@ VE.Theme.Skinners = {
             fs:SetTextColor(c.accent.r, c.accent.g, c.accent.b, c.accent.a)
         end
         ApplyFont(fs, c)
+    end,
+
+    -- Header Section skinner (Atlas-aware for MainFrame header area)
+    HeaderSection = function(f, c)
+        if f.atlasBg then
+            if c.atlas and c.atlas.headerSectionBg then
+                f.atlasBg:SetAtlas(c.atlas.headerSectionBg)
+                f.atlasBg:SetVertexColor(1, 1, 1, 1)
+            else
+                f.atlasBg:SetTexture("Interface\\Buttons\\WHITE8x8")
+                local opacity = GetBgOpacity()
+                f.atlasBg:SetVertexColor(c.panel.r, c.panel.g, c.panel.b, c.panel.a * opacity)
+            end
+        end
     end,
 }

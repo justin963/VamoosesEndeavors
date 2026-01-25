@@ -44,6 +44,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -86,6 +93,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -124,6 +138,13 @@ VAMOOSE_SchemeConstants = {
             header = { file = "Fonts\\FRIZQT__.TTF", size = 14, flags = "" },
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
+        },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
         },
     },
 
@@ -166,6 +187,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -206,6 +234,13 @@ VAMOOSE_SchemeConstants = {
             header = { file = "Fonts\\FRIZQT__.TTF", size = 14, flags = "" },
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
+        },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
         },
     },
 
@@ -258,6 +293,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -299,6 +341,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -337,6 +386,13 @@ VAMOOSE_SchemeConstants = {
             header = { file = "Fonts\\FRIZQT__.TTF", size = 14, flags = "" },
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
+        },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
         },
     },
 
@@ -379,6 +435,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -419,6 +482,13 @@ VAMOOSE_SchemeConstants = {
             body   = { file = "Fonts\\ARIALN.TTF",   size = 12, flags = "OUTLINE" },
             small  = { file = "Fonts\\ARIALN.TTF",   size = 10, flags = "OUTLINE" },
         },
+        -- Progress bar atlases (shared across all themes)
+        atlas = {
+            fillBarBg = "housing-dashboard-fillbar-bar-bg",
+            fillBarFill = "housing-dashboard-fillbar-fill",
+            pipComplete = "housing-dashboard-fillbar-pip-complete",
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",
+        },
     },
 
     -- ========================================================================
@@ -442,6 +512,11 @@ VAMOOSE_SchemeConstants = {
             xpBanner = "housing-dashboard-tasks-listitem-flag",            -- XP/points flag badge
             fillBarBg = "housing-dashboard-fillbar-bar-bg",                -- Fill bar background
             fillBarFill = "housing-dashboard-fillbar-fill",                -- Fill bar fill
+            titleBarBg = "housing-dashboard-fillbar-bar-bg",               -- Title bar background
+            headerSectionBg = "housing-basic-panel--stone-background",     -- Header section background
+            sectionLine = "housing-bulletinboard-list-header-decorative-line", -- Section header line
+            pipComplete = "housing-dashboard-fillbar-pip-complete",        -- Progress bar pip (reached)
+            pipIncomplete = "housing-dashboard-fillbar-pip-incomplete",    -- Progress bar pip (unreached)
             -- Decorative
             divider = "housing-dashboard-divider-horz-tile",               -- Horizontal divider (tileable)
             checkmark = "common-icon-checkmark",                           -- Completion checkmark
@@ -466,6 +541,16 @@ VAMOOSE_SchemeConstants = {
             tabActiveRight = "uiframe-activetab-right",                    -- Active tab right cap
             tabInactiveLeft = "uiframe-tab-left",                          -- Inactive tab left cap
             tabInactiveRight = "uiframe-tab-right",                        -- Inactive tab right cap
+            -- Scrollbar
+            scrollThumb = "decor-abilitybar-divider",                      -- Scrollbar thumb handle
+            -- Section header
+            sectionHeaderBg = "housing-woodsign",                          -- Section header background
+            -- Tab section background
+            tabSectionBg = "housing-woodsign",                             -- Tab strip background
+            -- Task list background
+            taskListBg = "housing-basic-panel--stone-background",           -- Task list scroll area background
+            -- Window border
+            windowBorder = "housing-simple-wood-frame",                     -- Main window border frame
         },
 
         -- Typography
