@@ -83,9 +83,7 @@ function VE.Store:RegisterReducer(action, reducerFn)
 end
 
 function VE.Store:Dispatch(action, payload)
-    if self.state.config.debug then
-        print("|cFF2aa198[VE Store]|r Dispatching:", action)
-    end
+    -- Note: Store dispatch logging removed - too verbose even for debug mode
 
     local reducer = self.reducers[action]
     if reducer then

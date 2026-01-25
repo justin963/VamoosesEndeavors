@@ -6,13 +6,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.3 - Housing Theme Polish**
+## **What's New in v1.5.4 - Performance & Live Updates**
 
-- **Housing Dashboard Button** - "Endeavor Tracker" button added to Blizzard's native Housing Dashboard
-- **Enhanced Housing Theme** - Custom logo, wood frame border, wood-sign headers, decorative foliage
-- **Decimal Precision Control** - Arrows to adjust contribution decimal places (1-3) in Activity tab
-- **Bug Fix** - House level/XP now updates correctly when switching houses
-- **UI Refinements** - Icon refresh button, dimmed title bar buttons, theme tooltip shows current theme
+- **Real-Time Task Progress** - Task progress now updates immediately when gathering (no refresh needed)
+- **Performance Fix** - Removed event handlers that caused game choppiness during herb/lumber gathering
+- **Optimized UI** - Endeavors tab optimized with efficient caching and reduced memory allocation
 
 *See CHANGELOG.txt for complete version history*
 
@@ -132,5 +130,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.3
+**Version:** 1.5.4
 **Game Version:** 12.0.0+ (Midnight)

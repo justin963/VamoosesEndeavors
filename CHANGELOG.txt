@@ -2,6 +2,24 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.4 (Released January 2026)
+--------------------------------------------------------------------------------
+
+PERFORMANCE:
+- Removed QUEST_LOG_UPDATE and CRITERIA_UPDATE event handlers that caused game
+  choppiness during herb/lumber gathering (events fire dozens per second)
+
+BUG FIXES:
+- Task progress now updates in real-time without needing to refresh or reopen
+  - Root cause: UI cache key only checked task count, not progress values
+  - Fix: Added progress hash to cache key so UI rebuilds when any task changes
+
+TECHNICAL:
+- Optimized Endeavors.lua with file-level caching and reusable sort array
+- Progress hash includes task index to detect reordering
+
+--------------------------------------------------------------------------------
+
 Version 1.5.3 (Released January 2026)
 --------------------------------------------------------------------------------
 

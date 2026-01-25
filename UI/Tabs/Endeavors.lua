@@ -7,18 +7,21 @@ VE = VE or {}
 VE.UI = VE.UI or {}
 VE.UI.Tabs = VE.UI.Tabs or {}
 
--- Helper to get current theme colors
-local function GetColors()
-    return VE.Constants:GetThemeColors()
-end
+-- Cache frequently used values
+local ipairs, pairs = ipairs, pairs
+local format = string.format
+local tinsert = table.insert
+local tsort = table.sort
 
--- Sort state: nil = none, "asc" = ascending, "desc" = descending
+-- Sort state (persisted)
 local sortState = {
-    column = nil, -- "xp" or "coupons"
+    column = nil,
     direction = nil,
 }
 
--- Load sort state from SavedVariables
+-- Reusable sorted tasks array (avoids allocation on every sort)
+local sortedTasksCache = {}
+
 local function LoadSortState()
     if VE_DB and VE_DB.ui and VE_DB.ui.taskSort then
         sortState.column = VE_DB.ui.taskSort.column
@@ -26,7 +29,6 @@ local function LoadSortState()
     end
 end
 
--- Save sort state to SavedVariables
 local function SaveSortState()
     VE_DB = VE_DB or {}
     VE_DB.ui = VE_DB.ui or {}
@@ -36,16 +38,66 @@ local function SaveSortState()
     }
 end
 
+-- Compute progress hash that changes when any task's progress changes
+local function ComputeProgressHash(tasks)
+    if not tasks then return 0 end
+    local hash = 0
+    for i, task in ipairs(tasks) do
+        -- Include index * 1000 to detect task reordering
+        hash = hash + i * 1000 + (task.current or 0) + ((task.completed and 500) or 0)
+    end
+    return hash
+end
+
+-- Sort comparator (created once, captures sortState)
+local function TaskSortComparator(a, b)
+    -- Completed tasks always sort to bottom
+    if a.completed ~= b.completed then
+        return not a.completed
+    end
+    -- Within same completion status, sort by selected column
+    local valA, valB
+    if sortState.column == "xp" then
+        valA = a.points or 0
+        valB = b.points or 0
+    else
+        valA = a.couponReward or 0
+        valB = b.couponReward or 0
+    end
+    if sortState.direction == "asc" then
+        return valA < valB
+    else
+        return valA > valB
+    end
+end
+
+-- Get sorted tasks (reuses cached array to avoid allocation)
+local function GetSortedTasks(tasks)
+    if not sortState.column or not sortState.direction then
+        return tasks
+    end
+    -- Clear and repopulate cache
+    for i = 1, #sortedTasksCache do
+        sortedTasksCache[i] = nil
+    end
+    for i, task in ipairs(tasks) do
+        sortedTasksCache[i] = task
+    end
+    tsort(sortedTasksCache, TaskSortComparator)
+    return sortedTasksCache
+end
+
 function VE.UI.Tabs:CreateEndeavors(parent)
     local UI = VE.Constants.UI
+    local rowHeight = UI.taskRowHeight
+    local rowSpacing = UI.rowSpacing
 
-    -- Load saved sort state
     LoadSortState()
 
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints()
-
-    local padding = 0  -- Container edge padding (0 for full-bleed atlas backgrounds)
+    container.taskRows = {}
+    container.lastTaskCacheKey = nil
 
     -- ========================================================================
     -- TASKS HEADER
@@ -55,25 +107,22 @@ function VE.UI.Tabs:CreateEndeavors(parent)
     tasksHeader:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
     tasksHeader:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
-    -- Sort buttons on header row (right side)
-    local function CreateSortButton(parent, column, xOffset)
-        local btn = CreateFrame("Button", nil, parent)
+    -- Sort button factory
+    local function CreateSortButton(parentFrame, column, xOffset)
+        local btn = CreateFrame("Button", nil, parentFrame)
         btn:SetSize(16, 16)
         btn:SetPoint("RIGHT", xOffset, 0)
+        btn.column = column
 
         local icon = btn:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
         icon:SetAtlas("housing-stair-arrow-down-default")
         btn.icon = icon
-        btn.column = column
 
         function btn:UpdateIcon()
             if sortState.column == self.column then
-                if sortState.direction == "asc" then
-                    self.icon:SetAtlas("housing-stair-arrow-up-highlight")
-                else
-                    self.icon:SetAtlas("housing-stair-arrow-down-highlight")
-                end
+                local atlas = sortState.direction == "asc" and "housing-stair-arrow-up-highlight" or "housing-stair-arrow-down-highlight"
+                self.icon:SetAtlas(atlas)
             else
                 self.icon:SetAtlas("housing-stair-arrow-down-default")
             end
@@ -91,13 +140,10 @@ function VE.UI.Tabs:CreateEndeavors(parent)
                 sortState.column = self.column
                 sortState.direction = "desc"
             end
-            -- Save sort state
             SaveSortState()
-            -- Update both buttons
             container.sortXpBtn:UpdateIcon()
             container.sortCouponsBtn:UpdateIcon()
-            -- Re-render task list
-            container:Update()
+            container:Update(true) -- Force update on sort change
         end)
 
         btn:SetScript("OnEnter", function(self)
@@ -111,24 +157,15 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             GameTooltip:Show()
         end)
 
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
+        btn:SetScript("OnLeave", GameTooltip_Hide)
 
         return btn
     end
 
-    -- XP sort button (centered over points badge: 32px wide at RIGHT -34, center = -34 - 16 = -50)
-    local sortXpBtn = CreateSortButton(tasksHeader, "xp", -50)
-    container.sortXpBtn = sortXpBtn
-
-    -- Coupons sort button (centered over coupon badge: 26px wide at RIGHT -4, center = -4 - 13 = -17)
-    local sortCouponsBtn = CreateSortButton(tasksHeader, "coupons", -17)
-    container.sortCouponsBtn = sortCouponsBtn
-
-    -- Update icons to reflect loaded state
-    sortXpBtn:UpdateIcon()
-    sortCouponsBtn:UpdateIcon()
+    container.sortXpBtn = CreateSortButton(tasksHeader, "xp", -50)
+    container.sortCouponsBtn = CreateSortButton(tasksHeader, "coupons", -17)
+    container.sortXpBtn:UpdateIcon()
+    container.sortCouponsBtn:UpdateIcon()
 
     -- ========================================================================
     -- TASKS LIST (Scrollable)
@@ -136,161 +173,128 @@ function VE.UI.Tabs:CreateEndeavors(parent)
 
     local taskListContainer = CreateFrame("Frame", nil, container, "BackdropTemplate")
     taskListContainer:SetPoint("TOPLEFT", tasksHeader, "BOTTOMLEFT", 4, 0)
-    taskListContainer:SetPoint("BOTTOMRIGHT", -padding, padding)
-    taskListContainer:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = nil,
-    })
+    taskListContainer:SetPoint("BOTTOMRIGHT", 0, 0)
+    taskListContainer:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
     container.taskListContainer = taskListContainer
 
-    -- Atlas background support
     local ApplyContainerColors = VE.UI:AddAtlasBackground(taskListContainer)
     ApplyContainerColors()
 
     local _, scrollContent = VE.UI:CreateScrollFrame(taskListContainer)
     container.scrollContent = scrollContent
 
-    -- Pool of task rows
-    container.taskRows = {}
+    -- Pre-create empty state elements
+    local emptyText = scrollContent:CreateFontString(nil, "OVERLAY")
+    emptyText:SetPoint("CENTER", scrollContent, "CENTER", 0, 20)
+    emptyText:Hide()
+    container.emptyText = emptyText
 
     -- ========================================================================
-    -- UPDATE FUNCTION
+    -- UPDATE FUNCTIONS
     -- ========================================================================
 
     function container:Update(forceUpdate)
         local state = VE.Store:GetState()
-        -- Update tasks list only (header is updated by MainFrame)
         self:UpdateTaskList(state.tasks, forceUpdate)
     end
 
     function container:UpdateTaskList(tasks, forceUpdate)
-        -- Skip rebuild if nothing changed (optimization)
         local taskCount = tasks and #tasks or 0
         local fetchState = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus and VE.EndeavorTracker.fetchStatus.state
-        local sortKey = (sortState.column or "none") .. "-" .. (sortState.direction or "none")
-        local cacheKey = taskCount .. "-" .. (fetchState or "nil") .. "-" .. sortKey
-        if not forceUpdate and self.lastTaskCacheKey and self.lastTaskCacheKey == cacheKey then
+        local sortKey = (sortState.column or "0") .. (sortState.direction or "0")
+        local progressHash = ComputeProgressHash(tasks)
+        local cacheKey = taskCount .. sortKey .. progressHash
+
+        if not forceUpdate and self.lastTaskCacheKey == cacheKey then
             return
         end
         self.lastTaskCacheKey = cacheKey
 
-        -- Hide all existing rows
-        for _, row in ipairs(self.taskRows) do
-            row:Hide()
+        -- Hide all rows first
+        for i = 1, #self.taskRows do
+            self.taskRows[i]:Hide()
         end
 
-        if not tasks or #tasks == 0 then
-            -- Show empty state with fetch status
-            local colors = GetColors()
-            if not self.emptyText then
-                self.emptyText = self.scrollContent:CreateFontString(nil, "OVERLAY")
-                self.emptyText:SetPoint("CENTER", self.scrollContent, "CENTER", 0, 20)
-            end
-            VE.Theme.ApplyFont(self.emptyText, colors)
-
-            -- Check fetch status to show appropriate message
-            local fetchStatus = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus
-            local isFetching = fetchStatus and (fetchStatus.state == "fetching" or fetchStatus.state == "retrying" or fetchStatus.state == "pending")
-
-            if isFetching or self.setActiveClicked then
-                self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
-                if self.setActiveButton then self.setActiveButton:Hide() end
-            else
-                self.emptyText:SetText("No endeavor tasks found.\nThis house is not set as your active endeavor.")
-                -- Create button via factory (once)
-                if not self.setActiveButton then
-                    self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText, {
-                        onBeforeClick = function()
-                            self.setActiveClicked = true
-                            if self.setActiveButton then self.setActiveButton:Hide() end
-                            self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
-                        end
-                    })
-                end
-                self.setActiveButton:Show()
-            end
-
-            self.emptyText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
-            self.emptyText:Show()
-            self.scrollContent:SetHeight(100)
+        -- Empty state
+        if taskCount == 0 then
+            self:ShowEmptyState()
             return
         end
 
-        if self.emptyText then
-            self.emptyText:Hide()
-        end
+        -- Hide empty state
+        self.emptyText:Hide()
         if self.setActiveButton then
             self.setActiveButton:Hide()
         end
 
-        -- Apply sorting if active (completed tasks always at bottom)
-        local sortedTasks = tasks
-        if sortState.column and sortState.direction then
-            sortedTasks = {}
-            for i, task in ipairs(tasks) do
-                sortedTasks[i] = task
-            end
-            table.sort(sortedTasks, function(a, b)
-                -- Completed tasks always sort to bottom
-                if a.completed ~= b.completed then
-                    return not a.completed
-                end
-                -- Within same completion status, sort by selected column
-                local valA, valB
-                if sortState.column == "xp" then
-                    valA = a.points or 0
-                    valB = b.points or 0
-                else -- coupons
-                    valA = a.couponReward or 0
-                    valB = b.couponReward or 0
-                end
-                if sortState.direction == "asc" then
-                    return valA < valB
-                else
-                    return valA > valB
-                end
-            end)
-        end
+        -- Get sorted tasks
+        local displayTasks = GetSortedTasks(tasks)
 
-        local yOffset = 2 -- Top padding for first row
-        local rowHeight = VE.Constants.UI.taskRowHeight
-        local rowSpacing = VE.Constants.UI.rowSpacing
-
-        for i, task in ipairs(sortedTasks) do
-            -- Get or create row
+        -- Render rows
+        local yOffset = 2
+        for i, task in ipairs(displayTasks) do
             local row = self.taskRows[i]
             if not row then
                 row = VE.UI:CreateTaskRow(self.scrollContent)
                 self.taskRows[i] = row
             end
-
             row:SetPoint("TOPLEFT", 0, -yOffset)
             row:SetPoint("TOPRIGHT", -2, -yOffset)
             row:SetTask(task)
             row:Show()
-
             yOffset = yOffset + rowHeight + rowSpacing
         end
 
-        -- Set content height for scrolling
         self.scrollContent:SetHeight(yOffset + 10)
     end
 
-    -- Initial update when shown
+    function container:ShowEmptyState()
+        local colors = VE.Constants:GetThemeColors()
+        VE.Theme.ApplyFont(self.emptyText, colors)
+
+        local fetchStatus = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus
+        local isFetching = fetchStatus and (fetchStatus.state == "fetching" or fetchStatus.state == "retrying" or fetchStatus.state == "pending")
+
+        if isFetching or self.setActiveClicked then
+            self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+            if self.setActiveButton then self.setActiveButton:Hide() end
+        else
+            self.emptyText:SetText("No endeavor tasks found.\nThis house is not set as your active endeavor.")
+            if not self.setActiveButton then
+                self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText, {
+                    onBeforeClick = function()
+                        self.setActiveClicked = true
+                        if self.setActiveButton then self.setActiveButton:Hide() end
+                        self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+                    end
+                })
+            end
+            self.setActiveButton:Show()
+        end
+
+        self.emptyText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
+        self.emptyText:Show()
+        self.scrollContent:SetHeight(100)
+    end
+
+    -- ========================================================================
+    -- EVENT HANDLERS
+    -- ========================================================================
+
     container:SetScript("OnShow", function(self)
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:FetchEndeavorData()
+        end
         self:Update()
     end)
 
-    -- Listen for theme updates to refresh colors
     VE.EventBus:Register("VE_THEME_UPDATE", function()
         ApplyContainerColors()
-        -- Task rows update via their own theme registration
         if container:IsShown() then
-            container:Update()
+            container:Update(true)
         end
     end)
 
-    -- Reset setActiveClicked flag when house selection changes
     VE.EventBus:Register("VE_HOUSE_SELECTED", function()
         container.setActiveClicked = false
     end)

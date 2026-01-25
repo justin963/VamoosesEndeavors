@@ -544,7 +544,6 @@ function VE:CreateMainWindow()
         -- Update contribution display (from activity log for current player)
         local playerContribution = 0
         local activityData = VE.EndeavorTracker:GetActivityLogData()
-        local debug = VE.Store:GetState().config.debug
         if activityData and activityData.taskActivity then
             local currentPlayer = UnitName("player")
             local entryCount = 0
@@ -552,14 +551,7 @@ function VE:CreateMainWindow()
                 if entry.playerName == currentPlayer then
                     playerContribution = playerContribution + (entry.amount or 0)
                     entryCount = entryCount + 1
-                    if debug then
-                        print(string.format("|cFF2aa198[VE Contrib]|r %s: +%.1f (%s)",
-                            entry.taskName or "?", entry.amount or 0, entry.playerName or "?"))
-                    end
                 end
-            end
-            if debug and entryCount > 0 then
-                print(string.format("|cFF2aa198[VE Contrib]|r Total: %.1f from %d entries", playerContribution, entryCount))
             end
         end
         -- Contribution = endeavor progress (from activity log)

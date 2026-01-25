@@ -23,10 +23,9 @@ function Tracker:Initialize()
     self.frame:RegisterEvent("INITIATIVE_TASKS_TRACKED_UPDATED")
     self.frame:RegisterEvent("INITIATIVE_TASKS_TRACKED_LIST_CHANGED")
     self.frame:RegisterEvent("INITIATIVE_ACTIVITY_LOG_UPDATED")
+    self.frame:RegisterEvent("INITIATIVE_TASK_COMPLETED")
+    self.frame:RegisterEvent("INITIATIVE_COMPLETED")
     self.frame:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
-    -- Additional events for task progress detection
-    self.frame:RegisterEvent("QUEST_LOG_UPDATE")
-    self.frame:RegisterEvent("CRITERIA_UPDATE")
 
     -- Track activity log loading state
     self.activityLogLoaded = false
@@ -51,10 +50,17 @@ function Tracker:Initialize()
         self:OnEvent(event, ...)
     end)
 
-    -- Listen for state changes to save character progress
+    -- Listen for state changes to save character progress (debounced)
     VE.EventBus:Register("VE_STATE_CHANGED", function(payload)
         if payload.action == "SET_TASKS" or payload.action == "SET_ENDEAVOR_INFO" then
-            self:SaveCurrentCharacterProgress()
+            -- Debounce character saves - only save once per second max
+            if self.saveCharProgressTimer then
+                self.saveCharProgressTimer:Cancel()
+            end
+            self.saveCharProgressTimer = C_Timer.NewTimer(0.5, function()
+                self.saveCharProgressTimer = nil
+                self:SaveCurrentCharacterProgress()
+            end)
         end
     end)
 
@@ -88,20 +94,18 @@ function Tracker:OnEvent(event, ...)
         if debug then
             print("|cFF2aa198[VE Tracker]|r NEIGHBORHOOD_INITIATIVE_UPDATED")
         end
-        -- Small delay to let API data settle after neighborhood change
-        C_Timer.After(0.2, function()
-            -- Pass true to skip requesting data again (we already have it from the event)
-            self:FetchEndeavorData(true)
-            -- Refresh UI to update task display
-            if VE.RefreshUI then
-                VE:RefreshUI()
-            end
-        end)
+        self:QueueDataRefresh()
 
-    elseif event == "INITIATIVE_TASKS_TRACKED_UPDATED" or
-           event == "INITIATIVE_TASKS_TRACKED_LIST_CHANGED" then
+    elseif event == "INITIATIVE_TASKS_TRACKED_UPDATED" then
         if debug then
-            print("|cFF2aa198[VE Tracker]|r Task tracking updated")
+            print("|cFF2aa198[VE Tracker]|r Tracked tasks updated")
+        end
+        self:QueueDataRefresh()
+        self:RefreshTrackedTasks()
+
+    elseif event == "INITIATIVE_TASKS_TRACKED_LIST_CHANGED" then
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Task tracking list changed")
         end
         self:RefreshTrackedTasks()
 
@@ -111,8 +115,22 @@ function Tracker:OnEvent(event, ...)
         end
         self.activityLogLoaded = true
         self.activityLogLastUpdated = time()
-        -- Notify UI to refresh activity/leaderboard tabs
         VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
+        self:QueueDataRefresh()
+
+    elseif event == "INITIATIVE_TASK_COMPLETED" then
+        local taskName = ...
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Task completed: " .. tostring(taskName))
+        end
+        self:QueueDataRefresh()
+
+    elseif event == "INITIATIVE_COMPLETED" then
+        local initiativeTitle = ...
+        if debug then
+            print("|cFF2aa198[VE Tracker]|r Initiative completed: " .. tostring(initiativeTitle))
+        end
+        self:FetchEndeavorData(true)
 
     elseif event == "PLAYER_HOUSE_LIST_UPDATED" then
         -- House list loaded - extract neighborhood and set viewing context (CRITICAL for API to work)
@@ -203,16 +221,6 @@ function Tracker:OnEvent(event, ...)
             print("|cFFdc322f[VE Tracker]|r No neighborhood GUID found - cannot load initiative data")
         end
 
-    elseif event == "QUEST_LOG_UPDATE" or event == "CRITERIA_UPDATE" then
-        -- These events can indicate task progress changes
-        -- Throttle to avoid excessive API calls (max once per 2 seconds)
-        if not self.lastProgressCheck or (GetTime() - self.lastProgressCheck) > 2 then
-            self.lastProgressCheck = GetTime()
-            if debug then
-                print("|cFF2aa198[VE Tracker]|r Progress event detected, refreshing...")
-            end
-            self:FetchEndeavorData()
-        end
     end
 end
 
@@ -269,6 +277,21 @@ function Tracker:SetupNeighborhoodContext(neighborhoodGUID, asActive)
     return true
 end
 
+-- Consolidated data refresh - debounces multiple event triggers into single fetch
+function Tracker:QueueDataRefresh()
+    if self.pendingRefreshTimer then
+        self.pendingRefreshTimer:Cancel()
+    end
+    self.pendingRefreshTimer = C_Timer.NewTimer(0.3, function()
+        self.pendingRefreshTimer = nil
+        -- FetchEndeavorData internally decides whether to request fresh data or use cache
+        self:FetchEndeavorData()
+        if VE.RefreshUI then
+            VE:RefreshUI()
+        end
+    end)
+end
+
 function Tracker:ClearEndeavorData()
     self:UpdateFetchStatus("loaded", 0, nil)
     VE.Store:Dispatch("SET_ENDEAVOR_INFO", {
@@ -295,9 +318,20 @@ end
 -- DATA FETCHING (Main)
 -- ============================================================================
 
-function Tracker:FetchEndeavorData(skipRequest, attempt)
+function Tracker:FetchEndeavorData(_, attempt)
     local debug = VE.Store:GetState().config.debug
     attempt = attempt or 0 -- 0 = manual/event-triggered, 1+ = auto-retry attempts
+
+    -- Debounce: skip entirely if fetched within last 1 second (unless retry attempt)
+    local now = GetTime()
+    if attempt == 0 and self.lastFetchTime and (now - self.lastFetchTime) < 1 then
+        return
+    end
+    self.lastFetchTime = now
+
+    -- Determine if we should request fresh data (prevents infinite loop)
+    -- Skip request if we requested within last 2 seconds
+    local skipRequest = self.lastRequestTime and (now - self.lastRequestTime) < 2
 
     -- Cancel any pending retry timer (prevents stale retries from interfering)
     if self.pendingRetryTimer then
@@ -306,7 +340,7 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
     end
 
     if debug then
-        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data..." .. (attempt > 0 and " (attempt " .. attempt .. ")" or ""))
+        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data..." .. (attempt > 0 and " (attempt " .. attempt .. ")" or "") .. (skipRequest and " (cached)" or " (fresh)"))
     end
 
     -- Update fetch status
@@ -349,8 +383,9 @@ function Tracker:FetchEndeavorData(skipRequest, attempt)
         return
     end
 
-    -- Only request fresh data if not triggered by the event (prevents infinite loop)
+    -- Request fresh data if we haven't recently (prevents infinite loop from event chain)
     if not skipRequest then
+        self.lastRequestTime = now
         -- Ensure neighborhood context is set before requesting (may have been lost)
         local neighborhoodGUID = nil
         if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
@@ -477,12 +512,6 @@ end
 -- ============================================================================
 
 function Tracker:ProcessInitiativeInfo(info)
-    local debug = VE.Store:GetState().config.debug
-
-    if debug then
-        print("|cFF2aa198[VE Tracker]|r Processing initiative:", info.title)
-    end
-
     -- Calculate days remaining from duration (seconds)
     local daysRemaining = 0
     if info.duration and info.duration > 0 then
