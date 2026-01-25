@@ -5,16 +5,21 @@ Vamoose's Endeavors - Changelog
 Version 1.5.3 (Released January 2026)
 --------------------------------------------------------------------------------
 
+NEW FEATURES:
+- Housing Dashboard Integration: "Endeavor Tracker" button in Blizzard's native Housing Dashboard
+  - Click to toggle the VE window directly from the dashboard
+  - Toggle visibility via "Show Dashboard Button" in Config tab
+- Decimal precision control: arrows to adjust contribution decimal places (1-3) in Activity tab
+- Theme tooltip now shows current theme name in addition to next theme
+
 HOUSING THEME ENHANCEMENTS:
 - Custom logo texture in title bar (replaces text for Housing Theme)
+- Wood frame border around window (atlas-based)
 - Section headers use housing-woodsign atlas background
 - Decorative foliage on section header corners (left and right)
 - Scrollbar handles use decor-abilitybar-divider atlas
 - Section headers now full-width (removed horizontal padding)
-
-NEW FEATURES:
-- Decimal precision control: arrows to adjust contribution decimal places (1-3) in Activity tab
-- Theme tooltip now shows current theme name in addition to next theme
+- Refresh button now icon-only (sync icon)
 
 UI IMPROVEMENTS:
 - Sort icons now centered over their XP/Coupon boxes in Endeavors tab

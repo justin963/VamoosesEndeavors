@@ -8,11 +8,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ## **What's New in v1.5.3 - Housing Theme Polish**
 
-- **Enhanced Housing Theme** - Custom logo, wood-sign section headers, decorative foliage
+- **Housing Dashboard Button** - "Endeavor Tracker" button added to Blizzard's native Housing Dashboard
+- **Enhanced Housing Theme** - Custom logo, wood frame border, wood-sign headers, decorative foliage
 - **Decimal Precision Control** - Arrows to adjust contribution decimal places (1-3) in Activity tab
-- **Improved Tab Styling** - Native Blizzard atlas textures for active/inactive tabs
 - **Bug Fix** - House level/XP now updates correctly when switching houses
-- **UI Refinements** - Dimmed title bar buttons, right-aligned house level, theme tooltip shows current theme
+- **UI Refinements** - Icon refresh button, dimmed title bar buttons, theme tooltip shows current theme
 
 *See CHANGELOG.txt for complete version history*
 
