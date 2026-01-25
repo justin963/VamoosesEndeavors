@@ -9,9 +9,10 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 ## **What's New in v1.5.3 - Housing Theme Polish**
 
 - **Enhanced Housing Theme** - Custom logo, wood-sign section headers, decorative foliage
+- **Decimal Precision Control** - Arrows to adjust contribution decimal places (1-3) in Activity tab
 - **Improved Tab Styling** - Native Blizzard atlas textures for active/inactive tabs
-- **UI Refinements** - Dimmed title bar buttons, right-aligned house level, better spacing
-- **Theme Tooltip** - Now shows current and next theme when hovering
+- **Bug Fix** - House level/XP now updates correctly when switching houses
+- **UI Refinements** - Dimmed title bar buttons, right-aligned house level, theme tooltip shows current theme
 
 *See CHANGELOG.txt for complete version history*
 

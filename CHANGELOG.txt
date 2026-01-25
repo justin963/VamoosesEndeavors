@@ -12,6 +12,10 @@ HOUSING THEME ENHANCEMENTS:
 - Scrollbar handles use decor-abilitybar-divider atlas
 - Section headers now full-width (removed horizontal padding)
 
+NEW FEATURES:
+- Decimal precision control: arrows to adjust contribution decimal places (1-3) in Activity tab
+- Theme tooltip now shows current theme name in addition to next theme
+
 UI IMPROVEMENTS:
 - Sort icons now centered over their XP/Coupon boxes in Endeavors tab
 - Removed pip icon from Leaderboard section header
@@ -20,6 +24,9 @@ UI IMPROVEMENTS:
 - Title bar buttons (theme, minimize) now dimmed when not hovered (matches close)
 - House level/XP text right-aligned in header
 - Refined header element positioning and spacing
+
+BUG FIXES:
+- Fixed house level/XP not updating when switching between houses
 
 --------------------------------------------------------------------------------
 
