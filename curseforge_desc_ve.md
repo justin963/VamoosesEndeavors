@@ -6,11 +6,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.4 - Performance & Live Updates**
+## **What's New in v1.5.5 - Active Neighborhood Display**
 
-- **Real-Time Task Progress** - Task progress now updates immediately when gathering (no refresh needed)
-- **Performance Fix** - Removed event handlers that caused game choppiness during herb/lumber gathering
-- **Optimized UI** - Endeavors tab optimized with efficient caching and reduced memory allocation
+- **Active Neighborhood Indicator** - See which house is your active endeavor destination below the dropdown
+- **Automatic Updates** - Active display updates when changed via VE button or Blizzard's dashboard
+- **Fixed Dashboard Conflicts** - VE no longer overrides Blizzard's Housing Dashboard neighborhood selection
 
 *See CHANGELOG.txt for complete version history*
 
@@ -130,5 +130,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.4
+**Version:** 1.5.5
 **Game Version:** 12.0.0+ (Midnight)

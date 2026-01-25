@@ -147,10 +147,20 @@ function Tracker:OnEvent(event, ...)
         local selectedIndex = self.selectedHouseIndex
         local neighborhoodGUID = nil
 
+        -- If user manually changed selection in last 2 seconds, respect their choice
+        local recentManualSelection = self.lastManualSelectionTime and (GetTime() - self.lastManualSelectionTime) < 2
+
         -- Check if current selection is still valid (index within bounds and house exists)
         if selectedIndex and houseInfoList and selectedIndex >= 1 and selectedIndex <= #houseInfoList then
             neighborhoodGUID = houseInfoList[selectedIndex].neighborhoodGUID
             -- Selection still valid, keep it
+        elseif recentManualSelection then
+            -- User just changed selection, don't auto-select even if index seems invalid
+            -- (might be a race condition with house list update)
+            if debug then
+                print("|cFF2aa198[VE Tracker]|r Preserving recent manual selection despite house list update")
+            end
+            return
         else
             -- Need to auto-select: use same priority as Blizzard
             selectedIndex = 1
@@ -205,20 +215,10 @@ function Tracker:OnEvent(event, ...)
         -- Notify UI about house list update
         VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = selectedIndex })
 
-        if neighborhoodGUID and C_NeighborhoodInitiative then
-            if debug then
-                print("|cFF2aa198[VE Tracker]|r Setting active/viewing neighborhood: " .. tostring(neighborhoodGUID))
-            end
-            -- SetActiveNeighborhood makes this the "active" neighborhood for endeavors (required for activity log)
-            if C_NeighborhoodInitiative.SetActiveNeighborhood then
-                C_NeighborhoodInitiative.SetActiveNeighborhood(neighborhoodGUID)
-            end
-            -- SetViewingNeighborhood sets the context for API calls
-            C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
+        -- Request data for current viewing neighborhood (don't change viewing context - respect Blizzard dashboard)
+        if C_NeighborhoodInitiative then
             C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
             self:RequestActivityLog()
-        elseif debug then
-            print("|cFFdc322f[VE Tracker]|r No neighborhood GUID found - cannot load initiative data")
         end
 
     end
@@ -255,26 +255,9 @@ function Tracker:IsViewingActiveNeighborhood()
     if not C_NeighborhoodInitiative then return false end
     local activeGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
     local viewingGUID = self:GetViewingNeighborhoodGUID()
-    if not activeGUID or not viewingGUID then return true end -- Assume active if can't determine
+    -- If we can't determine, assume NOT active (shows Set as Active button, which is safer)
+    if not activeGUID or not viewingGUID then return false end
     return activeGUID == viewingGUID
-end
-
-function Tracker:SetupNeighborhoodContext(neighborhoodGUID, asActive)
-    if not neighborhoodGUID or neighborhoodGUID == "" then return false end
-    if not C_NeighborhoodInitiative then return false end
-
-    local debug = VE.Store:GetState().config.debug
-    if debug then
-        print("|cFF2aa198[VE Tracker]|r Setting up neighborhood context:", neighborhoodGUID, asActive and "(active)" or "(viewing)")
-    end
-
-    C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
-    if asActive then
-        C_NeighborhoodInitiative.SetActiveNeighborhood(neighborhoodGUID)
-    end
-    C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
-    self:RequestActivityLog()
-    return true
 end
 
 -- Consolidated data refresh - debounces multiple event triggers into single fetch
@@ -384,20 +367,9 @@ function Tracker:FetchEndeavorData(_, attempt)
     end
 
     -- Request fresh data if we haven't recently (prevents infinite loop from event chain)
+    -- Don't change viewing neighborhood here - only SelectHouse should do that (respects Blizzard dashboard)
     if not skipRequest then
         self.lastRequestTime = now
-        -- Ensure neighborhood context is set before requesting (may have been lost)
-        local neighborhoodGUID = nil
-        if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
-            neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
-        end
-        if not neighborhoodGUID then
-            neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
-                               C_NeighborhoodInitiative.GetActiveNeighborhood()
-        end
-        if neighborhoodGUID and neighborhoodGUID ~= "" then
-            C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
-        end
         C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
     end
 
@@ -422,20 +394,9 @@ function Tracker:FetchEndeavorData(_, attempt)
             end
             self.pendingRetryTimer = C_Timer.NewTimer(10, function()
                 self.pendingRetryTimer = nil
-                -- Use selected house's neighborhood for retry
-                local neighborhoodGUID = nil
-                if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
-                    neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
-                end
-                if not neighborhoodGUID then
-                    neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
-                                       C_NeighborhoodInitiative.GetActiveNeighborhood()
-                end
-                if neighborhoodGUID and neighborhoodGUID ~= "" then
-                    C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
-                    C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
-                    self:RequestActivityLog()
-                end
+                -- Just re-request data, don't change viewing neighborhood (respects Blizzard dashboard)
+                C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+                self:RequestActivityLog()
             end)
         end
         return
@@ -447,6 +408,12 @@ function Tracker:FetchEndeavorData(_, attempt)
     -- Get the active endeavor neighborhood
     local activeGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
     local dataGUID = initiativeInfo.neighborhoodGUID
+
+    -- Detect if active neighborhood changed (e.g., from Blizzard's dashboard)
+    if activeGUID and activeGUID ~= self.lastKnownActiveGUID then
+        self.lastKnownActiveGUID = activeGUID
+        VE.EventBus:Trigger("VE_ACTIVE_NEIGHBORHOOD_CHANGED")
+    end
 
     -- Sync dropdown if Blizzard's dashboard changed the viewing neighborhood
     if dataGUID and self.houseList then
@@ -1006,29 +973,12 @@ function Tracker:RefreshAll()
         return
     end
 
-    -- Get neighborhood GUID from selected house or fallback
-    local neighborhoodGUID = nil
-    if self.houseList and self.selectedHouseIndex and self.houseList[self.selectedHouseIndex] then
-        neighborhoodGUID = self.houseList[self.selectedHouseIndex].neighborhoodGUID
+    -- Request fresh data for current viewing neighborhood (don't change viewing context - respects Blizzard dashboard)
+    if debug then
+        print("|cFF2aa198[VE Tracker]|r RefreshAll: Requesting data for current viewing neighborhood")
     end
-    if not neighborhoodGUID then
-        neighborhoodGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and
-                           C_NeighborhoodInitiative.GetActiveNeighborhood()
-    end
-
-    if neighborhoodGUID and neighborhoodGUID ~= "" then
-        if debug then
-            print("|cFF2aa198[VE Tracker]|r RefreshAll: Setting neighborhood " .. tostring(neighborhoodGUID))
-        end
-        -- Step 1: Set viewing neighborhood context
-        C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
-        -- Step 2: Request initiative info (triggers NEIGHBORHOOD_INITIATIVE_UPDATED)
-        C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
-        -- Step 3: Request activity log (triggers INITIATIVE_ACTIVITY_LOG_UPDATED)
-        self:RequestActivityLog()
-    elseif debug then
-        print("|cFFdc322f[VE Tracker]|r RefreshAll: No neighborhood GUID available")
-    end
+    C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
+    self:RequestActivityLog()
 end
 
 -- ============================================================================
@@ -1049,6 +999,7 @@ function Tracker:SelectHouse(index)
     end
 
     self.selectedHouseIndex = index
+    self.lastManualSelectionTime = GetTime()  -- Track when user manually changed selection
     -- Persist selection to SavedVariables
     VE_DB = VE_DB or {}
     VE_DB.selectedHouseIndex = index
@@ -1084,9 +1035,6 @@ function Tracker:SelectHouse(index)
             print("|cFF2aa198[VE Tracker]|r Called SetViewingNeighborhood and RequestNeighborhoodInitiativeInfo (not active yet)")
         end
     end
-
-    -- Notify UI
-    VE.EventBus:Trigger("VE_HOUSE_SELECTED", { index = index, houseInfo = houseInfo })
 end
 
 -- Set the currently selected house as the active endeavor
@@ -1106,6 +1054,9 @@ function Tracker:SetAsActiveEndeavor()
 
         -- Notify user in chat
         print("|cFF2aa198[VE]|r Active Endeavor switched to |cFFffd700" .. (houseInfo.houseName or "Unknown") .. "|r. |cFFcb4b16All task progress/XP now applies to this house.|r")
+
+        -- Notify UI that active neighborhood changed
+        VE.EventBus:Trigger("VE_ACTIVE_NEIGHBORHOOD_CHANGED")
 
         -- Refresh data now that it's active
         self:UpdateFetchStatus("fetching", 0, nil)

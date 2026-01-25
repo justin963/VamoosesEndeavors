@@ -2,6 +2,29 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.5 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Active Neighborhood Display: Shows which house is your active endeavor destination
+  - House icon with neighborhood name below the dropdown
+  - Updates automatically when changed via VE or Blizzard's dashboard
+
+BUG FIXES:
+- Fixed neighborhood switching bugs where VE would override Blizzard dashboard
+  - Removed SetViewingNeighborhood from auto-refresh paths
+  - VE no longer forces dashboard to switch back to active house
+- Fixed "Set as Active" button incorrectly showing "Fetching..." state
+  - Simplified empty state logic by removing complex flag-based tracking
+  - Now purely based on whether viewing the active neighborhood
+
+CODE CLEANUP:
+- Removed dead SetupNeighborhoodContext function
+- Removed unused setActiveClicked flag and related logic
+- Cleaned up unused local variables in Endeavors.lua
+
+--------------------------------------------------------------------------------
+
 Version 1.5.4 (Released January 2026)
 --------------------------------------------------------------------------------
 

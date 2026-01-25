@@ -8,9 +8,7 @@ VE.UI = VE.UI or {}
 VE.UI.Tabs = VE.UI.Tabs or {}
 
 -- Cache frequently used values
-local ipairs, pairs = ipairs, pairs
-local format = string.format
-local tinsert = table.insert
+local ipairs = ipairs
 local tsort = table.sort
 
 -- Sort state (persisted)
@@ -200,7 +198,6 @@ function VE.UI.Tabs:CreateEndeavors(parent)
 
     function container:UpdateTaskList(tasks, forceUpdate)
         local taskCount = tasks and #tasks or 0
-        local fetchState = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus and VE.EndeavorTracker.fetchStatus.state
         local sortKey = (sortState.column or "0") .. (sortState.direction or "0")
         local progressHash = ComputeProgressHash(tasks)
         local cacheKey = taskCount .. sortKey .. progressHash
@@ -254,20 +251,21 @@ function VE.UI.Tabs:CreateEndeavors(parent)
 
         local fetchStatus = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus
         local isFetching = fetchStatus and (fetchStatus.state == "fetching" or fetchStatus.state == "retrying" or fetchStatus.state == "pending")
+        local isViewingActive = VE.EndeavorTracker and VE.EndeavorTracker:IsViewingActiveNeighborhood()
 
-        if isFetching or self.setActiveClicked then
-            self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+        if isViewingActive then
+            -- Viewing the ACTIVE neighborhood
+            if isFetching then
+                self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
+            else
+                self.emptyText:SetText("No endeavor tasks available.\nTry refreshing or check back later.")
+            end
             if self.setActiveButton then self.setActiveButton:Hide() end
         else
+            -- Viewing an INACTIVE neighborhood - show Set as Active button
             self.emptyText:SetText("No endeavor tasks found.\nThis house is not set as your active endeavor.")
             if not self.setActiveButton then
-                self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText, {
-                    onBeforeClick = function()
-                        self.setActiveClicked = true
-                        if self.setActiveButton then self.setActiveButton:Hide() end
-                        self.emptyText:SetText("Fetching endeavor data...\nThis may take a few seconds.")
-                    end
-                })
+                self.setActiveButton = VE.UI:CreateSetAsActiveButton(self.scrollContent, self.emptyText, {})
             end
             self.setActiveButton:Show()
         end
@@ -293,10 +291,6 @@ function VE.UI.Tabs:CreateEndeavors(parent)
         if container:IsShown() then
             container:Update(true)
         end
-    end)
-
-    VE.EventBus:Register("VE_HOUSE_SELECTED", function()
-        container.setActiveClicked = false
     end)
 
     return container

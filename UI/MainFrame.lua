@@ -243,16 +243,22 @@ function VE:CreateMainWindow()
     houseLevelText:SetText("")
     frame.houseLevelText = houseLevelText
 
-    -- Fetch status text (below dropdown) - shows loading/retry status
-    local fetchStatusText = dropdownRow:CreateFontString(nil, "OVERLAY")
-    fetchStatusText:SetPoint("TOPLEFT", houseDropdown, "BOTTOMLEFT", 0, -2)
-    fetchStatusText:SetJustifyH("LEFT")
-    VE.Theme.ApplyFont(fetchStatusText, C, "small")
-    fetchStatusText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
-    fetchStatusText._colorType = "text_dim"
-    VE.Theme:Register(fetchStatusText, "HeaderText")
-    fetchStatusText:Hide()  -- Hidden by default, shown when needed
-    frame.fetchStatusText = fetchStatusText
+    -- Active neighborhood icon (below dropdown, aligned to left edge)
+    local activeIcon = dropdownRow:CreateTexture(nil, "ARTWORK")
+    activeIcon:SetSize(16, 16)
+    activeIcon:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 3, -2)
+    activeIcon:SetAtlas("housing-map-plot-player-house-highlight")
+    frame.activeIcon = activeIcon
+
+    -- Active neighborhood text (after icon)
+    local activeNeighborhoodText = dropdownRow:CreateFontString(nil, "OVERLAY")
+    activeNeighborhoodText:SetPoint("LEFT", activeIcon, "RIGHT", 4, 0)
+    activeNeighborhoodText:SetJustifyH("LEFT")
+    VE.Theme.ApplyFont(activeNeighborhoodText, C, "small")
+    activeNeighborhoodText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
+    activeNeighborhoodText._colorType = "text_dim"
+    VE.Theme:Register(activeNeighborhoodText, "HeaderText")
+    frame.activeNeighborhoodText = activeNeighborhoodText
 
     -- ========================================================================
     -- ROW 2: Coupons (left), Contribution (right)
@@ -366,92 +372,40 @@ function VE:CreateMainWindow()
         end
     end
 
-    -- Fetch status display (shows below dropdown, independent of house level)
-    function frame:UpdateFetchStatus(status)
-        if not status then
-            status = VE.EndeavorTracker and VE.EndeavorTracker.fetchStatus or { state = "pending" }
-        end
-        local colors = VE.Constants.Colors
-        local timestamp = VE.EndeavorTracker and VE.EndeavorTracker.activityLogLastUpdated
-        local timeStr = timestamp and date("%H:%M:%S", timestamp) or ""
-
-        -- Cancel any pending fade timer
-        if self.fetchStatusFadeTimer then
-            self.fetchStatusFadeTimer:Cancel()
-            self.fetchStatusFadeTimer = nil
+    -- Show which neighborhood is the active endeavor destination
+    function frame:UpdateActiveNeighborhood()
+        if not C_NeighborhoodInitiative then
+            self.activeIcon:Hide()
+            self.activeNeighborhoodText:SetText("")
+            return
         end
 
-        -- Reset alpha and ensure visible for new messages
-        self.fetchStatusText:SetAlpha(1)
-
-        -- Check if we actually have data (tasks or activity log)
-        local hasData = false
-        local state = VE.Store:GetState()
-        if state and state.tasks and #state.tasks > 0 then
-            hasData = true
-        elseif timestamp then
-            hasData = true
+        local activeGUID = C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+        if not activeGUID then
+            self.activeIcon:Hide()
+            self.activeNeighborhoodText:SetText("None")
+            return
         end
 
-        local text = ""
-
-        if status.state == "loaded" and hasData then
-            local successColor = string.format("%02x%02x%02x", colors.success.r*255, colors.success.g*255, colors.success.b*255)
-            text = "|cFF" .. successColor .. "Data loaded"
-            if timeStr ~= "" then
-                text = text .. " - " .. timeStr
-            end
-            text = text .. "|r"
-
-            -- Fade out after 0.5 seconds, then hide
-            self.fetchStatusFadeTimer = C_Timer.NewTimer(0.5, function()
-                if self.fetchStatusText then
-                    UIFrameFadeOut(self.fetchStatusText, 1, 1, 0)
-                    C_Timer.After(1, function()
-                        self.fetchStatusText:SetText("")
-                        self.fetchStatusText:Hide()
-                    end)
+        -- Find the house name for the active neighborhood
+        local activeName = nil
+        if VE.EndeavorTracker and VE.EndeavorTracker.houseList then
+            for _, houseInfo in ipairs(VE.EndeavorTracker.houseList) do
+                if houseInfo.neighborhoodGUID == activeGUID then
+                    activeName = houseInfo.houseName or houseInfo.neighborhoodName
+                    break
                 end
-            end)
-        elseif status.state == "fetching" then
-            -- Actively fetching - only show if we don't have data yet
-            if not hasData then
-                text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255) .. "Fetching data...|r"
-            end
-        elseif status.state == "retrying" then
-            local remaining = status.nextRetry and (status.nextRetry - time()) or 60
-            if remaining < 0 then remaining = 0 end
-            text = "|cFF" .. string.format("%02x%02x%02x", colors.warning.r*255, colors.warning.g*255, colors.warning.b*255)
-            text = text .. "Retry " .. (status.attempt or 1) .. "/3 in " .. remaining .. "s|r"
-        else
-            -- Only show waiting message if we don't have data yet
-            if not hasData then
-                text = "|cFF" .. string.format("%02x%02x%02x", colors.text_dim.r*255, colors.text_dim.g*255, colors.text_dim.b*255) .. "Waiting for data...|r"
             end
         end
 
-        -- Show or hide fetch status text (house level is always visible now)
-        if text ~= "" then
-            self.fetchStatusText:SetText(text)
-            self.fetchStatusText:Show()
-        else
-            self.fetchStatusText:SetText("")
-            self.fetchStatusText:Hide()
-        end
+        self.activeIcon:Show()
+        local colors = VE.Constants:GetThemeColors()
+        local accentHex = string.format("%02x%02x%02x", colors.accent.r*255, colors.accent.g*255, colors.accent.b*255)
+        self.activeNeighborhoodText:SetText("|cFF" .. accentHex .. (activeName or "Unknown") .. "|r")
     end
 
-    -- Listen for fetch status changes
-    VE.EventBus:Register("VE_FETCH_STATUS_CHANGED", function(status)
-        if frame.UpdateFetchStatus then
-            frame:UpdateFetchStatus(status)
-        end
-    end)
-
-    -- Listen for activity log updates (refresh status and contribution)
+    -- Listen for activity log updates (refresh contribution)
     VE.EventBus:Register("VE_ACTIVITY_LOG_UPDATED", function(payload)
-        if frame.UpdateFetchStatus then
-            frame:UpdateFetchStatus()
-        end
         -- Refresh contribution display (calculated from activity log)
         if frame.UpdateHeader then
             frame:UpdateHeader()
@@ -463,15 +417,15 @@ function VE:CreateMainWindow()
         if frame.UpdateHouseDropdown and payload then
             frame:UpdateHouseDropdown(payload.houseList, payload.selectedIndex)
         end
+        if frame.UpdateActiveNeighborhood then
+            frame:UpdateActiveNeighborhood()
+        end
     end)
 
-    -- Ticker to update countdown while retrying
-    frame.fetchStatusTicker = C_Timer.NewTicker(1, function()
-        if frame:IsShown() and VE.EndeavorTracker then
-            local status = VE.EndeavorTracker.fetchStatus
-            if status and status.state == "retrying" then
-                frame:UpdateFetchStatus(status)
-            end
+    -- Listen for active neighborhood changes (from VE button or Blizzard's dashboard)
+    VE.EventBus:Register("VE_ACTIVE_NEIGHBORHOOD_CHANGED", function()
+        if frame.UpdateActiveNeighborhood then
+            frame:UpdateActiveNeighborhood()
         end
     end)
 
@@ -486,35 +440,16 @@ function VE:CreateMainWindow()
         if VE.EndeavorTracker then
             VE.EndeavorTracker:FetchEndeavorData()
         end
-        -- Update status displays
-        frame:UpdateFetchStatus()
         -- Update house dropdown
         if VE.EndeavorTracker then
             frame:UpdateHouseDropdown(VE.EndeavorTracker:GetHouseList(), VE.EndeavorTracker:GetSelectedHouseIndex())
         end
-        -- Recreate countdown ticker if needed (cancelled on hide)
-        if not frame.fetchStatusTicker then
-            frame.fetchStatusTicker = C_Timer.NewTicker(1, function()
-                if frame:IsShown() and VE.EndeavorTracker then
-                    local status = VE.EndeavorTracker.fetchStatus
-                    if status and status.state == "retrying" then
-                        frame:UpdateFetchStatus(status)
-                    end
-                end
-            end)
-        end
+        -- Update active neighborhood display
+        frame:UpdateActiveNeighborhood()
     end)
 
-    -- Cancel ticker and hide tooltip on hide
+    -- Hide tooltip on hide
     frame:HookScript("OnHide", function()
-        if frame.fetchStatusTicker then
-            frame.fetchStatusTicker:Cancel()
-            frame.fetchStatusTicker = nil
-        end
-        if frame.fetchStatusFadeTimer then
-            frame.fetchStatusFadeTimer:Cancel()
-            frame.fetchStatusFadeTimer = nil
-        end
         if GameTooltip:IsOwned(frame) then
             GameTooltip:Hide()
         end
