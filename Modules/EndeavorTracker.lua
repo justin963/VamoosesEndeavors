@@ -30,6 +30,9 @@ function Tracker:Initialize()
     -- Track activity log loading state
     self.activityLogLoaded = false
 
+    -- Task XP cache (from activity log) - maps taskID -> { amount, completionTime }
+    self.taskXPCache = {}
+
     -- Track fetch status for UI display
     self.fetchStatus = {
         state = "pending",  -- "pending", "fetching", "loaded", "retrying"
@@ -115,6 +118,7 @@ function Tracker:OnEvent(event, ...)
         end
         self.activityLogLoaded = true
         self.activityLogLastUpdated = time()
+        self:BuildTaskXPCache()  -- Rebuild XP cache from activity log
         VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
         self:QueueDataRefresh()
 
@@ -951,6 +955,64 @@ function Tracker:GetActivityLogData()
 
     local logInfo = C_NeighborhoodInitiative.GetInitiativeActivityLogInfo()
     return logInfo
+end
+
+-- Build task XP cache from activity log (entry.amount = actual XP earned)
+-- Also builds per-player cache for current character lookup
+function Tracker:BuildTaskXPCache()
+    self.taskXPCache = {}
+    self.taskXPByPlayer = {}  -- taskID -> playerName -> { amount, completionTime }
+    local logInfo = self:GetActivityLogData()
+    if logInfo and logInfo.taskActivity then
+        for _, entry in ipairs(logInfo.taskActivity) do
+            local taskId = entry.taskID
+            local amount = entry.amount
+            local playerName = entry.playerName
+            local completionTime = entry.completionTime or 0
+            if taskId and amount then
+                -- Global cache: most recent completion's XP value
+                if not self.taskXPCache[taskId] or completionTime > (self.taskXPCache[taskId].completionTime or 0) then
+                    self.taskXPCache[taskId] = {
+                        amount = amount,
+                        completionTime = completionTime,
+                    }
+                end
+                -- Per-player cache: most recent completion per player
+                if playerName then
+                    self.taskXPByPlayer[taskId] = self.taskXPByPlayer[taskId] or {}
+                    if not self.taskXPByPlayer[taskId][playerName] or completionTime > (self.taskXPByPlayer[taskId][playerName].completionTime or 0) then
+                        self.taskXPByPlayer[taskId][playerName] = {
+                            amount = amount,
+                            completionTime = completionTime,
+                        }
+                    end
+                end
+            end
+        end
+    end
+    return self.taskXPCache
+end
+
+-- Get actual earned XP from activity log cache (nil if never completed)
+function Tracker:GetTaskXP(taskID)
+    if not self.taskXPCache then
+        self:BuildTaskXPCache()
+    end
+    local cached = self.taskXPCache[taskID]
+    return cached and cached.amount or nil
+end
+
+-- Get actual earned XP for current player only (nil if current char hasn't completed)
+function Tracker:GetTaskXPForCurrentPlayer(taskID)
+    if not self.taskXPByPlayer then
+        self:BuildTaskXPCache()
+    end
+    local playerName = UnitName("player")
+    local taskData = self.taskXPByPlayer[taskID]
+    if taskData and taskData[playerName] then
+        return taskData[playerName].amount
+    end
+    return nil
 end
 
 function Tracker:RequestActivityLog()

@@ -771,6 +771,19 @@ function VE.UI:CreateTaskRow(parent, options)
                     GameTooltip:AddLine("(Decreases with completions)", 0.5, 0.5, 0.5)
                 end
             end
+            -- Show base endeavor XP contribution
+            if self.task.points and self.task.points > 0 then
+                GameTooltip:AddLine(string.format("Base Contribution: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
+            end
+            -- Show current character's last contribution
+            if VE.EndeavorTracker and self.task.id then
+                local myXP = VE.EndeavorTracker:GetTaskXPForCurrentPlayer(self.task.id)
+                if myXP then
+                    GameTooltip:AddLine(string.format("Last Contribution: %.2f", myXP), c.text_dim.r, c.text_dim.g, c.text_dim.b)
+                else
+                    GameTooltip:AddLine("0 - not completed", c.text_dim.r, c.text_dim.g, c.text_dim.b)
+                end
+            end
             -- Tracking hint
             if not self.task.completed then
                 GameTooltip:AddLine(" ")
@@ -1197,4 +1210,95 @@ function VE.UI:ColorCode(colorName)
         end
     end
     return "|cFFffffff"
+end
+
+-- ============================================================================
+-- CSV EXPORT WINDOW
+-- ============================================================================
+
+function VE.UI:ShowCSVExportWindow(csvText, rowCount)
+    local Colors = GetScheme()
+
+    -- Reuse existing window or create new
+    if not VE.csvExportWindow then
+        local window = CreateFrame("Frame", "VE_CSVExportWindow", UIParent, "BackdropTemplate")
+        window:SetSize(500, 400)
+        window:SetPoint("CENTER")
+        window:SetFrameStrata("DIALOG")
+        window:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        window:SetMovable(true)
+        window:EnableMouse(true)
+        window:RegisterForDrag("LeftButton")
+        window:SetScript("OnDragStart", window.StartMoving)
+        window:SetScript("OnDragStop", window.StopMovingOrSizing)
+        window:SetClampedToScreen(true)
+
+        -- Title bar
+        local titleBar = CreateFrame("Frame", nil, window)
+        titleBar:SetHeight(24)
+        titleBar:SetPoint("TOPLEFT", 0, 0)
+        titleBar:SetPoint("TOPRIGHT", 0, 0)
+        titleBar:EnableMouse(true)
+        titleBar:RegisterForDrag("LeftButton")
+        titleBar:SetScript("OnDragStart", function() window:StartMoving() end)
+        titleBar:SetScript("OnDragStop", function() window:StopMovingOrSizing() end)
+
+        local titleText = titleBar:CreateFontString(nil, "OVERLAY")
+        titleText:SetPoint("LEFT", 10, 0)
+        titleText:SetFont(STANDARD_TEXT_FONT, 12, "")
+        window.titleText = titleText
+
+        -- Close button
+        local closeBtn = CreateFrame("Button", nil, titleBar)
+        closeBtn:SetSize(16, 16)
+        closeBtn:SetPoint("RIGHT", -4, 0)
+        closeBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+        closeBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+        closeBtn:SetScript("OnClick", function() window:Hide() end)
+
+        -- Instructions
+        local instructions = window:CreateFontString(nil, "OVERLAY")
+        instructions:SetPoint("TOPLEFT", 10, -30)
+        instructions:SetFont(STANDARD_TEXT_FONT, 10, "")
+        instructions:SetText("Select all (Ctrl+A) and copy (Ctrl+C) to paste into Excel or a text file:")
+        window.instructions = instructions
+
+        -- Scroll frame for edit box
+        local scrollFrame = CreateFrame("ScrollFrame", nil, window, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 10, -50)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+
+        -- Edit box (copyable text)
+        local editBox = CreateFrame("EditBox", nil, scrollFrame)
+        editBox:SetMultiLine(true)
+        editBox:SetAutoFocus(false)
+        editBox:SetFontObject(ChatFontNormal)
+        editBox:SetWidth(440)
+        editBox:EnableMouse(true)
+        editBox:SetScript("OnEscapePressed", function() window:Hide() end)
+        scrollFrame:SetScrollChild(editBox)
+        window.editBox = editBox
+
+        VE.csvExportWindow = window
+    end
+
+    local window = VE.csvExportWindow
+
+    -- Apply current theme colors
+    window:SetBackdropColor(Colors.bg.r, Colors.bg.g, Colors.bg.b, 0.98)
+    window:SetBackdropBorderColor(Colors.border.r, Colors.border.g, Colors.border.b, 1)
+    window.titleText:SetText("Activity Export (" .. rowCount .. " entries)")
+    window.titleText:SetTextColor(Colors.text.r, Colors.text.g, Colors.text.b)
+    window.instructions:SetTextColor(Colors.text_dim.r, Colors.text_dim.g, Colors.text_dim.b)
+
+    -- Set the CSV content
+    window.editBox:SetText(csvText)
+    window.editBox:HighlightText()
+    window.editBox:SetFocus()
+
+    window:Show()
 end

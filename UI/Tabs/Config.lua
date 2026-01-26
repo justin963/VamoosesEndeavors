@@ -325,18 +325,24 @@ function VE.UI.Tabs:CreateConfig(parent)
     fontSizeLabel:SetTextColor(fontSizeColors.text.r, fontSizeColors.text.g, fontSizeColors.text.b)
     fontSizeRow.label = fontSizeLabel
 
-    -- Decrease button (aligned with dropdown left edge)
-    local fontDownBtn = VE.UI:CreateButton(fontSizeRow, "-", 24, 22)
-    fontDownBtn:SetPoint("RIGHT", -136, 0)
+    -- Increase button (rightmost)
+    local fontUpBtn = VE.UI:CreateButton(fontSizeRow, "+", 24, 22)
+    fontUpBtn:SetPoint("RIGHT", 0, 0)
 
-    -- Current scale display (centered between buttons)
+    -- Current scale display (left of + button)
     local scaleDisplay = fontSizeRow:CreateFontString(nil, "OVERLAY")
-    scaleDisplay:SetPoint("CENTER", fontSizeRow, "RIGHT", -80, 0)
+    scaleDisplay:SetPoint("RIGHT", fontUpBtn, "LEFT", -4, 0)
+    scaleDisplay:SetWidth(32)
+    scaleDisplay:SetJustifyH("CENTER")
     VE.Theme.ApplyFont(scaleDisplay, fontSizeColors)
     local currentScale = VE.Store.state.config.fontScale or 0
     scaleDisplay:SetText(currentScale >= 0 and ("+" .. currentScale) or tostring(currentScale))
     scaleDisplay:SetTextColor(fontSizeColors.accent.r, fontSizeColors.accent.g, fontSizeColors.accent.b)
     fontSizeRow.scaleDisplay = scaleDisplay
+
+    -- Decrease button (left of display)
+    local fontDownBtn = VE.UI:CreateButton(fontSizeRow, "-", 24, 22)
+    fontDownBtn:SetPoint("RIGHT", scaleDisplay, "LEFT", -4, 0)
     fontDownBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.fontScale or 0
         local newScale = math.max(current - 2, -4)
@@ -344,10 +350,6 @@ function VE.UI.Tabs:CreateConfig(parent)
         scaleDisplay:SetText(newScale >= 0 and ("+" .. newScale) or tostring(newScale))
         VE.EventBus:Trigger("VE_THEME_UPDATE", {})
     end)
-
-    -- Increase button
-    local fontUpBtn = VE.UI:CreateButton(fontSizeRow, "+", 24, 22)
-    fontUpBtn:SetPoint("RIGHT", 0, 0)
     fontUpBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.fontScale or 0
         local newScale = math.min(current + 2, 8)
@@ -378,18 +380,24 @@ function VE.UI.Tabs:CreateConfig(parent)
     uiScaleLabel:SetTextColor(uiScaleColors.text.r, uiScaleColors.text.g, uiScaleColors.text.b)
     uiScaleRow.label = uiScaleLabel
 
-    -- Decrease button (aligned with dropdown left edge)
-    local uiScaleDownBtn = VE.UI:CreateButton(uiScaleRow, "-", 24, 22)
-    uiScaleDownBtn:SetPoint("RIGHT", -136, 0)
+    -- Increase button (rightmost)
+    local uiScaleUpBtn = VE.UI:CreateButton(uiScaleRow, "+", 24, 22)
+    uiScaleUpBtn:SetPoint("RIGHT", 0, 0)
 
-    -- Current scale display (centered between buttons)
+    -- Current scale display (left of + button)
     local uiScaleValue = uiScaleRow:CreateFontString(nil, "OVERLAY")
-    uiScaleValue:SetPoint("CENTER", uiScaleRow, "RIGHT", -80, 0)
+    uiScaleValue:SetPoint("RIGHT", uiScaleUpBtn, "LEFT", -4, 0)
+    uiScaleValue:SetWidth(36)
+    uiScaleValue:SetJustifyH("CENTER")
     VE.Theme.ApplyFont(uiScaleValue, uiScaleColors)
     local currentUIScale = VE.Store.state.config.uiScale or 1.0
     uiScaleValue:SetText(string.format("%.0f%%", currentUIScale * 100))
     uiScaleValue:SetTextColor(uiScaleColors.accent.r, uiScaleColors.accent.g, uiScaleColors.accent.b)
     uiScaleRow.scaleValue = uiScaleValue
+
+    -- Decrease button (left of display)
+    local uiScaleDownBtn = VE.UI:CreateButton(uiScaleRow, "-", 24, 22)
+    uiScaleDownBtn:SetPoint("RIGHT", uiScaleValue, "LEFT", -4, 0)
     uiScaleDownBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.uiScale or 1.0
         local newScale = math.max(current - 0.1, 0.8)
@@ -398,10 +406,6 @@ function VE.UI.Tabs:CreateConfig(parent)
         uiScaleValue:SetText(string.format("%.0f%%", newScale * 100))
         VE.EventBus:Trigger("VE_UI_SCALE_UPDATE", {})
     end)
-
-    -- Increase button
-    local uiScaleUpBtn = VE.UI:CreateButton(uiScaleRow, "+", 24, 22)
-    uiScaleUpBtn:SetPoint("RIGHT", 0, 0)
     uiScaleUpBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.uiScale or 1.0
         local newScale = math.min(current + 0.1, 1.4)
@@ -433,19 +437,24 @@ function VE.UI.Tabs:CreateConfig(parent)
     opacityLabel:SetTextColor(opacityColors.text.r, opacityColors.text.g, opacityColors.text.b)
     opacityRow.label = opacityLabel
 
-    -- Decrease button (more transparent)
-    local opacityDownBtn = VE.UI:CreateButton(opacityRow, "-", 24, 22)
-    opacityDownBtn:SetPoint("RIGHT", -136, 0)
+    -- Increase button (rightmost)
+    local opacityUpBtn = VE.UI:CreateButton(opacityRow, "+", 24, 22)
+    opacityUpBtn:SetPoint("RIGHT", 0, 0)
 
-    -- Current opacity display (centered between buttons)
+    -- Current opacity display (left of + button)
     local opacityValue = opacityRow:CreateFontString(nil, "OVERLAY")
-    opacityValue:SetPoint("CENTER", opacityRow, "RIGHT", -80, 0)
+    opacityValue:SetPoint("RIGHT", opacityUpBtn, "LEFT", -4, 0)
+    opacityValue:SetWidth(36)
+    opacityValue:SetJustifyH("CENTER")
     VE.Theme.ApplyFont(opacityValue, opacityColors)
     local currentOpacity = VE.Store.state.config.bgOpacity or 0.9
     opacityValue:SetText(string.format("%.0f%%", currentOpacity * 100))
     opacityValue:SetTextColor(opacityColors.accent.r, opacityColors.accent.g, opacityColors.accent.b)
     opacityRow.opacityValue = opacityValue
 
+    -- Decrease button (left of display)
+    local opacityDownBtn = VE.UI:CreateButton(opacityRow, "-", 24, 22)
+    opacityDownBtn:SetPoint("RIGHT", opacityValue, "LEFT", -4, 0)
     opacityDownBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.bgOpacity or 0.9
         local newOpacity = math.max(current - 0.1, 0.3)
@@ -454,10 +463,6 @@ function VE.UI.Tabs:CreateConfig(parent)
         opacityValue:SetText(string.format("%.0f%%", newOpacity * 100))
         VE.EventBus:Trigger("VE_THEME_UPDATE", {})
     end)
-
-    -- Increase button (more opaque)
-    local opacityUpBtn = VE.UI:CreateButton(opacityRow, "+", 24, 22)
-    opacityUpBtn:SetPoint("RIGHT", 0, 0)
     opacityUpBtn:SetScript("OnClick", function()
         local current = VE.Store:GetState().config.bgOpacity or 0.9
         local newOpacity = math.min(current + 0.1, 1.0)

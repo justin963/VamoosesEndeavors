@@ -78,29 +78,54 @@ function VE:CreateMainWindow()
     VE.Theme:Register(tabBar, "TabBar")
 
     -- Create tab buttons (via factory method with Theme Engine registration)
-    -- Calculate equal tab width to fill entire bar
     local NUM_TABS = 5
-    local tabWidth = (uiConsts.mainWidth / NUM_TABS) + 8
+    local tabHeight = uiConsts.tabHeight or 24
+    local isHousingTheme = Colors.atlas and Colors.atlas.tabSectionBg
+
+    -- Housing theme: full-width tabs; other themes: text-fit tabs
+    local tabWidth = isHousingTheme and ((uiConsts.mainWidth / NUM_TABS) + 8) or nil
+    local tabSpacing = isHousingTheme and -10 or 2
+    local tabPadding = 16  -- Padding on each side of text for non-housing themes
 
     local endeavorsTabBtn = VE.UI:CreateTabButton(tabBar, "Endeavors")
-    endeavorsTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
+    if tabWidth then
+        endeavorsTabBtn:SetSize(tabWidth, tabHeight)
+    else
+        endeavorsTabBtn:SetSize((endeavorsTabBtn.label:GetStringWidth() or 50) + tabPadding, tabHeight)
+    end
     endeavorsTabBtn:SetPoint("LEFT", 4, 0)
 
     local leaderboardTabBtn = VE.UI:CreateTabButton(tabBar, "Rankings")
-    leaderboardTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    leaderboardTabBtn:SetPoint("LEFT", endeavorsTabBtn, "RIGHT", -10, 0)
+    if tabWidth then
+        leaderboardTabBtn:SetSize(tabWidth, tabHeight)
+    else
+        leaderboardTabBtn:SetSize((leaderboardTabBtn.label:GetStringWidth() or 50) + tabPadding, tabHeight)
+    end
+    leaderboardTabBtn:SetPoint("LEFT", endeavorsTabBtn, "RIGHT", tabSpacing, 0)
 
     local activityTabBtn = VE.UI:CreateTabButton(tabBar, "Activity")
-    activityTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    activityTabBtn:SetPoint("LEFT", leaderboardTabBtn, "RIGHT", -10, 0)
+    if tabWidth then
+        activityTabBtn:SetSize(tabWidth, tabHeight)
+    else
+        activityTabBtn:SetSize((activityTabBtn.label:GetStringWidth() or 50) + tabPadding, tabHeight)
+    end
+    activityTabBtn:SetPoint("LEFT", leaderboardTabBtn, "RIGHT", tabSpacing, 0)
 
     local infoTabBtn = VE.UI:CreateTabButton(tabBar, "Info")
-    infoTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    infoTabBtn:SetPoint("LEFT", activityTabBtn, "RIGHT", -10, 0)
+    if tabWidth then
+        infoTabBtn:SetSize(tabWidth, tabHeight)
+    else
+        infoTabBtn:SetSize((infoTabBtn.label:GetStringWidth() or 50) + tabPadding, tabHeight)
+    end
+    infoTabBtn:SetPoint("LEFT", activityTabBtn, "RIGHT", tabSpacing, 0)
 
     local configTabBtn = VE.UI:CreateTabButton(tabBar, "Config")
-    configTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    configTabBtn:SetPoint("LEFT", infoTabBtn, "RIGHT", -10, 0)
+    if tabWidth then
+        configTabBtn:SetSize(tabWidth, tabHeight)
+    else
+        configTabBtn:SetSize((configTabBtn.label:GetStringWidth() or 50) + tabPadding, tabHeight)
+    end
+    configTabBtn:SetPoint("LEFT", infoTabBtn, "RIGHT", tabSpacing, 0)
 
     frame.endeavorsTabBtn = endeavorsTabBtn
     frame.leaderboardTabBtn = leaderboardTabBtn
@@ -665,6 +690,29 @@ function VE:CreateMainWindow()
         local colors = VE.Constants:GetThemeColors()
         VE.Theme.ApplyFont(frame.houseLevelText, colors, "small")
         frame:UpdateHousingDisplay()
+        -- Refresh active neighborhood text (uses inline color codes)
+        if frame.UpdateActiveNeighborhood then
+            frame:UpdateActiveNeighborhood()
+        end
+
+        -- Resize tabs based on theme (housing = full-width, others = text-fit)
+        local housingTheme = colors.atlas and colors.atlas.tabSectionBg
+        local fullTabWidth = housingTheme and ((uiConsts.mainWidth / 5) + 8) or nil
+        local spacing = housingTheme and -10 or 2
+        local padding = 16
+
+        local tabs = { frame.endeavorsTabBtn, frame.leaderboardTabBtn, frame.activityTabBtn, frame.infoTabBtn, frame.configTabBtn }
+        for i, tab in ipairs(tabs) do
+            if fullTabWidth then
+                tab:SetWidth(fullTabWidth)
+            elseif tab.label then
+                tab:SetWidth((tab.label:GetStringWidth() or 50) + padding)
+            end
+            -- Update spacing (skip first tab)
+            if i > 1 then
+                tab:SetPoint("LEFT", tabs[i-1], "RIGHT", spacing, 0)
+            end
+        end
     end)
 
     -- Listen for UI scale changes

@@ -52,6 +52,325 @@ function VE.UI.Tabs:CreateActivity(parent)
     -- Decimal precision control (1-3)
     container.decimalPrecision = 1
 
+    -- Filter state
+    container.filterMeOnly = false
+    container.filterMyChars = false  -- Filter for all player's known characters
+    container.filterTaskName = nil  -- nil = "All Tasks"
+    container.uniqueTaskNames = {}  -- Populated during update
+
+    -- "Me Only" filter toggle (icon button)
+    local meOnlyBtn = CreateFrame("Button", nil, feedHeader, "BackdropTemplate")
+    meOnlyBtn:SetSize(18, 14)
+    meOnlyBtn:SetPoint("LEFT", feedHeader, "LEFT", 8, 0)
+    meOnlyBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    local C = GetColors()
+    meOnlyBtn:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, 0.8)
+    meOnlyBtn:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
+
+    local meOnlyIcon = meOnlyBtn:CreateTexture(nil, "ARTWORK")
+    meOnlyIcon:SetSize(12, 12)
+    meOnlyIcon:SetPoint("CENTER", 0, 0)
+    meOnlyIcon:SetAtlas("housefinder_neighborhood-list-friend-icon")
+    meOnlyIcon:SetDesaturated(true)
+    meOnlyIcon:SetAlpha(0.5)
+    meOnlyBtn.icon = meOnlyIcon
+
+    function meOnlyBtn:UpdateAppearance()
+        local colors = GetColors()
+        if container.filterMeOnly then
+            self:SetBackdropColor(colors.success.r, colors.success.g, colors.success.b, 0.4)
+            self:SetBackdropBorderColor(colors.success.r, colors.success.g, colors.success.b, 0.8)
+            self.icon:SetDesaturated(false)
+            self.icon:SetAlpha(1)
+        else
+            self:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
+            self:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 0.5)
+            self.icon:SetDesaturated(true)
+            self.icon:SetAlpha(0.5)
+        end
+    end
+
+    meOnlyBtn:SetScript("OnClick", function()
+        container.filterMeOnly = not container.filterMeOnly
+        meOnlyBtn:UpdateAppearance()
+        container:Update(true)
+    end)
+    meOnlyBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Filter: Current Character Only")
+        GameTooltip:AddLine(container.filterMeOnly and "Click to show all players" or "Click to show only your activities", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    meOnlyBtn:SetScript("OnLeave", GameTooltip_Hide)
+    container.meOnlyBtn = meOnlyBtn
+
+    -- "My Chars" filter toggle (all player's alts)
+    local myCharsBtn = CreateFrame("Button", nil, feedHeader, "BackdropTemplate")
+    myCharsBtn:SetSize(18, 14)
+    myCharsBtn:SetPoint("LEFT", meOnlyBtn, "RIGHT", 2, 0)
+    myCharsBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    myCharsBtn:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, 0.8)
+    myCharsBtn:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
+
+    local myCharsIcon = myCharsBtn:CreateTexture(nil, "ARTWORK")
+    myCharsIcon:SetSize(12, 12)
+    myCharsIcon:SetPoint("CENTER", 0, 0)
+    myCharsIcon:SetAtlas("housefinder_neighborhood-friends-icon")
+    myCharsIcon:SetDesaturated(true)
+    myCharsIcon:SetAlpha(0.5)
+    myCharsBtn.icon = myCharsIcon
+
+    function myCharsBtn:UpdateAppearance()
+        local colors = GetColors()
+        if container.filterMyChars then
+            self:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.4)
+            self:SetBackdropBorderColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.8)
+            self.icon:SetDesaturated(false)
+            self.icon:SetAlpha(1)
+        else
+            self:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
+            self:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 0.5)
+            self.icon:SetDesaturated(true)
+            self.icon:SetAlpha(0.5)
+        end
+    end
+
+    myCharsBtn:SetScript("OnClick", function()
+        container.filterMyChars = not container.filterMyChars
+        -- Disable "Me Only" if "My Chars" is enabled (mutually exclusive)
+        if container.filterMyChars then
+            container.filterMeOnly = false
+            meOnlyBtn:UpdateAppearance()
+        end
+        myCharsBtn:UpdateAppearance()
+        container:Update(true)
+    end)
+    myCharsBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Filter: My Characters")
+        GameTooltip:AddLine(container.filterMyChars and "Click to show all players" or "Click to show only your alts", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    myCharsBtn:SetScript("OnLeave", GameTooltip_Hide)
+    container.myCharsBtn = myCharsBtn
+
+    -- Export to CSV button
+    local exportBtn = CreateFrame("Button", nil, feedHeader)
+    exportBtn:SetSize(14, 14)
+    exportBtn:SetPoint("LEFT", myCharsBtn, "RIGHT", 4, 0)
+    local exportIcon = exportBtn:CreateTexture(nil, "ARTWORK")
+    exportIcon:SetAllPoints()
+    exportIcon:SetAtlas("housing-neighborhood-invite-icon")
+    exportIcon:SetVertexColor(0.85, 0.85, 0.85)
+    exportBtn.icon = exportIcon
+    exportBtn:SetScript("OnEnter", function(self)
+        self.icon:SetVertexColor(1, 1, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Export to CSV")
+        GameTooltip:AddLine("Click to view activity data in CSV format", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    exportBtn:SetScript("OnLeave", function(self)
+        self.icon:SetVertexColor(0.85, 0.85, 0.85)
+        GameTooltip_Hide()
+    end)
+    exportBtn:SetScript("OnClick", function()
+        local activityData = VE.EndeavorTracker:GetActivityLogData()
+        if not activityData or not activityData.taskActivity or #activityData.taskActivity == 0 then
+            print("|cffff9900VE:|r No activity data to export.")
+            return
+        end
+        -- Build CSV string
+        local csv = "Player,Task,XP,Time\n"
+        for _, entry in ipairs(activityData.taskActivity) do
+            local player = entry.playerName or "Unknown"
+            local task = entry.taskName or "Unknown"
+            local xp = entry.amount or 0
+            local timeStr = ""
+            if entry.completionTime and entry.completionTime > 0 then
+                timeStr = date("%Y-%m-%d %H:%M:%S", entry.completionTime)
+            end
+            -- Escape commas in task names
+            task = task:gsub(",", ";")
+            csv = csv .. string.format("%s,%s,%d,%s\n", player, task, xp, timeStr)
+        end
+        -- Show in popup window
+        VE.UI:ShowCSVExportWindow(csv, #activityData.taskActivity)
+    end)
+    container.exportBtn = exportBtn
+
+    -- Update meOnlyBtn to disable myChars when enabled
+    meOnlyBtn:SetScript("OnClick", function()
+        container.filterMeOnly = not container.filterMeOnly
+        -- Disable "My Chars" if "Me Only" is enabled (mutually exclusive)
+        if container.filterMeOnly then
+            container.filterMyChars = false
+            myCharsBtn:UpdateAppearance()
+        end
+        meOnlyBtn:UpdateAppearance()
+        container:Update(true)
+    end)
+
+    -- Task filter dropdown button (right side of header)
+    local taskFilterBtn = CreateFrame("Button", nil, feedHeader, "BackdropTemplate")
+    taskFilterBtn:SetSize(90, 14)
+    taskFilterBtn:SetPoint("RIGHT", feedHeader, "RIGHT", -30, 1)
+    taskFilterBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    taskFilterBtn:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, 0.8)
+    taskFilterBtn:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
+
+    local taskFilterText = taskFilterBtn:CreateFontString(nil, "OVERLAY")
+    taskFilterText:SetPoint("LEFT", 4, 0)
+    taskFilterText:SetPoint("RIGHT", -12, 0)
+    taskFilterText:SetJustifyH("LEFT")
+    taskFilterText:SetWordWrap(false)
+    VE.Theme.ApplyFont(taskFilterText, C)  -- Apply font before SetText
+    taskFilterText:SetText("All Tasks")
+    taskFilterText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
+    taskFilterBtn.text = taskFilterText
+
+    local taskFilterArrow = taskFilterBtn:CreateTexture(nil, "OVERLAY")
+    taskFilterArrow:SetSize(8, 8)
+    taskFilterArrow:SetPoint("RIGHT", -2, 0)
+    taskFilterArrow:SetAtlas("housing-stair-arrow-down-default")
+    taskFilterBtn.arrow = taskFilterArrow
+
+    function taskFilterBtn:UpdateAppearance()
+        local colors = GetColors()
+        if container.filterTaskName then
+            self:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.3)
+            self:SetBackdropBorderColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.8)
+            self.text:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
+            -- Truncate long task names
+            local displayName = container.filterTaskName or ""
+            if #displayName > 12 then
+                displayName = string.sub(displayName, 1, 11) .. "…"
+            end
+            self.text:SetText(displayName)
+        else
+            self:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
+            self:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 0.5)
+            self.text:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            self.text:SetText("All Tasks")
+        end
+        VE.Theme.ApplyFont(self.text, colors)
+    end
+
+    -- Task filter dropdown menu
+    local taskDropdown = CreateFrame("Frame", "VE_TaskFilterDropdown", taskFilterBtn, "BackdropTemplate")
+    taskDropdown:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    taskDropdown:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, 0.95)
+    taskDropdown:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 1)
+    taskDropdown:SetFrameStrata("DIALOG")
+    taskDropdown:SetPoint("TOPLEFT", taskFilterBtn, "BOTTOMLEFT", 0, -2)
+    taskDropdown:SetSize(180, 100)
+    taskDropdown:Hide()
+    taskDropdown.items = {}
+    container.taskDropdown = taskDropdown
+
+    local function BuildTaskDropdown()
+        local colors = GetColors()
+        -- Hide existing items
+        for _, item in ipairs(taskDropdown.items) do
+            item:Hide()
+        end
+
+        -- Build list: "All Tasks" + unique task names
+        local tasks = { { name = nil, display = "All Tasks" } }
+        for _, taskName in ipairs(container.uniqueTaskNames) do
+            table.insert(tasks, { name = taskName, display = taskName })
+        end
+
+        local yOffset = 2
+        local itemHeight = 16
+        for i, taskData in ipairs(tasks) do
+            local item = taskDropdown.items[i]
+            if not item then
+                item = CreateFrame("Button", nil, taskDropdown, "BackdropTemplate")
+                item:SetHeight(itemHeight)
+                item:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+                item:SetBackdropColor(0, 0, 0, 0)
+                local itemText = item:CreateFontString(nil, "OVERLAY")
+                itemText:SetPoint("LEFT", 4, 0)
+                itemText:SetPoint("RIGHT", -4, 0)
+                itemText:SetJustifyH("LEFT")
+                itemText:SetWordWrap(false)
+                item.text = itemText
+                item:SetScript("OnEnter", function(self)
+                    self:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.3)
+                end)
+                item:SetScript("OnLeave", function(self)
+                    self:SetBackdropColor(0, 0, 0, 0)
+                end)
+                taskDropdown.items[i] = item
+            end
+
+            item:SetPoint("TOPLEFT", 2, -yOffset)
+            item:SetPoint("TOPRIGHT", -2, -yOffset)
+            VE.Theme.ApplyFont(item.text, colors)  -- Apply font before SetText
+            item.text:SetText(taskData.display)
+
+            if taskData.name == container.filterTaskName then
+                item.text:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
+            else
+                item.text:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+            end
+
+            item:SetScript("OnClick", function()
+                container.filterTaskName = taskData.name
+                taskFilterBtn:UpdateAppearance()
+                taskDropdown:Hide()
+                container:Update(true)
+            end)
+            item:Show()
+
+            yOffset = yOffset + itemHeight
+        end
+
+        taskDropdown:SetHeight(yOffset + 4)
+        taskDropdown:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.95)
+        taskDropdown:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 1)
+    end
+
+    taskFilterBtn:SetScript("OnClick", function()
+        if taskDropdown:IsShown() then
+            taskDropdown:Hide()
+        else
+            BuildTaskDropdown()
+            taskDropdown:Show()
+        end
+    end)
+    taskFilterBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Filter: By Task Type")
+        GameTooltip:AddLine("Click to select a specific task", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    taskFilterBtn:SetScript("OnLeave", GameTooltip_Hide)
+    container.taskFilterBtn = taskFilterBtn
+
+    -- Close dropdown when clicking elsewhere
+    taskDropdown:SetScript("OnShow", function()
+        taskDropdown:SetPropagateKeyboardInput(true)
+    end)
+    taskDropdown:SetScript("OnHide", function() end)
+
     -- Decrease decimals arrow (rotated left)
     local decArrow = CreateFrame("Button", nil, feedHeader)
     decArrow:SetSize(12, 12)
@@ -406,10 +725,48 @@ function VE.UI.Tabs:CreateActivity(parent)
         -- ACTIVITY FEED (most recent first)
         -- ====================================================================
 
-        -- Sort by completionTime (most recent first)
+        -- Build unique task names from task list (faster than activity log)
+        local state = VE.Store:GetState()
+        if state.tasks and #state.tasks > 0 then
+            self.uniqueTaskNames = {}
+            for _, task in ipairs(state.tasks) do
+                if task.name then
+                    table.insert(self.uniqueTaskNames, task.name)
+                end
+            end
+            table.sort(self.uniqueTaskNames)
+        end
+
+        -- Sort by completionTime (most recent first) and apply filters
         local sortedActivity = {}
+        local currentPlayer = UnitName("player")
+
+        -- Build set of known character names for "My Chars" filter
+        -- Uses VE_DB.myCharacters (same as Leaderboard tab) which persists all logged-in alts
+        local myCharNames = {}
+        if self.filterMyChars then
+            VE_DB = VE_DB or {}
+            VE_DB.myCharacters = VE_DB.myCharacters or {}
+            for charName, _ in pairs(VE_DB.myCharacters) do
+                myCharNames[charName] = true
+            end
+            -- Always include current player
+            myCharNames[currentPlayer] = true
+        end
+
         for _, entry in ipairs(activityData.taskActivity) do
-            table.insert(sortedActivity, entry)
+            -- Apply "Me Only" filter
+            if self.filterMeOnly and entry.playerName ~= currentPlayer then
+                -- Skip non-player entries
+            -- Apply "My Chars" filter
+            elseif self.filterMyChars and not myCharNames[entry.playerName] then
+                -- Skip non-player-alt entries
+            -- Apply task name filter
+            elseif self.filterTaskName and entry.taskName ~= self.filterTaskName then
+                -- Skip non-matching tasks
+            else
+                table.insert(sortedActivity, entry)
+            end
         end
         table.sort(sortedActivity, function(a, b)
             return (a.completionTime or 0) > (b.completionTime or 0)
@@ -419,6 +776,25 @@ function VE.UI.Tabs:CreateActivity(parent)
         yOffset = 0
         rowHeight = 20
         rowSpacing = 1
+
+        -- Show "no results" if filters excluded everything
+        if #sortedActivity == 0 then
+            if not self.noResultsText then
+                self.noResultsText = self.scrollContent:CreateFontString(nil, "OVERLAY")
+                self.noResultsText:SetPoint("CENTER", self.scrollContent, "CENTER", 0, 0)
+            end
+            local colors = GetColors()
+            VE.Theme.ApplyFont(self.noResultsText, colors)
+            self.noResultsText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
+            self.noResultsText:SetText("No activity matches your filters.")
+            self.noResultsText:Show()
+            self.scrollContent:SetHeight(60)
+            return
+        end
+
+        if self.noResultsText then
+            self.noResultsText:Hide()
+        end
 
         for i, entry in ipairs(sortedActivity) do
             local row = self.feedRows[i]
@@ -458,6 +834,16 @@ function VE.UI.Tabs:CreateActivity(parent)
     -- Listen for theme updates to refresh colors
     VE.EventBus:Register("VE_THEME_UPDATE", function()
         ApplyContainerColors()
+        -- Update filter button appearances
+        if container.meOnlyBtn then container.meOnlyBtn:UpdateAppearance() end
+        if container.myCharsBtn then container.myCharsBtn:UpdateAppearance() end
+        if container.taskFilterBtn then container.taskFilterBtn:UpdateAppearance() end
+        -- Update dropdown colors
+        if container.taskDropdown then
+            local colors = GetColors()
+            container.taskDropdown:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.95)
+            container.taskDropdown:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 1)
+        end
         if container:IsShown() then
             container:Update()
         end

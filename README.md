@@ -6,12 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.6 - Auto-Load Fix & Initiative Tracking**
+## **What's New in v1.5.7 - Activity Filters & Task Tooltips**
 
-- **Fixed Auto-Load** - Housing and endeavor data now loads reliably on login without opening the Housing Dashboard
-- **Initiative Collection** - Discover all initiative types as you play; run `/ve initiatives` to see your collection
-- **Info Tab** - Browse collected initiative types with collapsible details showing descriptions and dates
-- **UI Refinements** - Updated icons and polished tab bar layout
+- **Activity Tab Filters** - Filter activity by "Me Only", "My Chars", or specific task type
+- **CSV Export** - Export activity log data for external analysis
+- **Task Tooltip XP** - Hover over tasks to see Base and Last Contribution values
+- **Per-Player Tracking** - XP display shows your character's personal contribution data
 
 *See CHANGELOG.txt for complete version history*
 
@@ -138,5 +138,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.6
+**Version:** 1.5.7
 **Game Version:** 12.0.0+ (Midnight)

@@ -2,6 +2,38 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.7 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Activity Tab Filters: Three new filters for Recent Activity feed
+  - "Me Only" button: Show only your current character's contributions
+  - "My Chars" button: Show all your alts' contributions (uses rankings data)
+  - Task dropdown: Filter by specific task type
+  - Filters are combinable (e.g., My Chars + specific task)
+  - "Me Only" and "My Chars" are mutually exclusive
+- CSV Export: Export activity log data for external analysis
+  - Export button in Recent Activity header (housing invite icon)
+  - Opens popup window with CSV-formatted data (Player, Task, XP, Time)
+  - Select all and copy to paste into Excel or text file
+- Task XP Cache: Backend support for task XP lookup from activity log
+  - BuildTaskXPCache() builds map of taskID -> XP amount
+  - GetTaskXP() returns actual earned XP for completed tasks
+  - Cache rebuilds on INITIATIVE_ACTIVITY_LOG_UPDATED event
+- Task Tooltip XP Display: Hover over tasks to see contribution values
+  - "Base Contribution" shows the task's XP point value
+  - "Last Contribution" shows your character's personal XP earned
+  - Per-player filtering ensures only your data is shown
+  - Shows "0 - not completed" for tasks you haven't done yet
+
+UI IMPROVEMENTS:
+- Filter buttons use atlas icons (friend icon for Me Only, friends icon for My Chars)
+- Active filters show colored highlights (green for Me Only, accent for My Chars/Task)
+- Task dropdown built from task list (not activity log) for better performance
+- "No activity matches your filters" message when filters exclude all entries
+
+--------------------------------------------------------------------------------
+
 Version 1.5.6 (Released January 2026)
 --------------------------------------------------------------------------------
 
