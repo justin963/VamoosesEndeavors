@@ -221,29 +221,17 @@ function VE.UI:CreateMainFrame(name, title)
 
     -- Minimize Button (collapses task list)
     local minimizeBtn = CreateFrame("Button", nil, titleBar)
-    minimizeBtn:SetSize(16, 16)
+    minimizeBtn:SetSize(18, 18)
     minimizeBtn:SetPoint("RIGHT", -33, 0)
 
     local minimizeIcon = minimizeBtn:CreateTexture(nil, "ARTWORK")
     minimizeIcon:SetAllPoints()
-    minimizeIcon:SetAtlas("housing-floor-arrow-down-default")
-    minimizeIcon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dimmed when not hovered
+    minimizeIcon:SetAtlas("Map-Filter-Button")
+    minimizeIcon:SetVertexColor(0.85, 0.85, 0.85, 1)  -- Dimmed when not hovered
     minimizeBtn.icon = minimizeIcon
 
     frame.isMinimized = false
     frame.expandedHeight = UI.mainHeight
-
-    -- Helper to update atlas based on state
-    local function UpdateMinimizeAtlas(pressed)
-        if frame.isMinimized then
-            minimizeIcon:SetAtlas(pressed and "housing-floor-arrow-up-pressed" or "housing-floor-arrow-up-default")
-        else
-            minimizeIcon:SetAtlas(pressed and "housing-floor-arrow-down-pressed" or "housing-floor-arrow-down-default")
-        end
-    end
-
-    minimizeBtn:SetScript("OnMouseDown", function() UpdateMinimizeAtlas(true) end)
-    minimizeBtn:SetScript("OnMouseUp", function() UpdateMinimizeAtlas(false) end)
 
     minimizeBtn:SetScript("OnClick", function()
         frame.isMinimized = not frame.isMinimized
@@ -262,7 +250,6 @@ function VE.UI:CreateMainFrame(name, title)
                 frame.content:Show()
             end
         end
-        UpdateMinimizeAtlas(false)
     end)
 
     minimizeBtn:SetScript("OnEnter", function(self)
@@ -270,10 +257,10 @@ function VE.UI:CreateMainFrame(name, title)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         if frame.isMinimized then
             GameTooltip:AddLine("Expand", 1, 1, 1)
-            GameTooltip:AddLine("Show task list", 0.7, 0.7, 0.7, true)
+            GameTooltip:AddLine("Show full tracker", 0.7, 0.7, 0.7, true)
         else
-            GameTooltip:AddLine("Minimize", 1, 1, 1)
-            GameTooltip:AddLine("Collapse task list", 0.7, 0.7, 0.7, true)
+            GameTooltip:AddLine("Swap to Mini-Tracker", 1, 1, 1)
+            GameTooltip:AddLine("Collapse to compact view", 0.7, 0.7, 0.7, true)
         end
         GameTooltip:Show()
     end)
@@ -292,14 +279,10 @@ function VE.UI:CreateMainFrame(name, title)
 
     local themeIcon = themeBtn:CreateTexture(nil, "ARTWORK")
     themeIcon:SetAllPoints()
-    themeIcon:SetAtlas("decor-ability-alterations-active")
-    themeIcon:SetVertexColor(0.7, 0.7, 0.7, 1)  -- Dimmed when not hovered
+    themeIcon:SetAtlas("Crosshair_Transmogrify_32")
+    themeIcon:SetVertexColor(0.85, 0.85, 0.85, 1)  -- Dimmed when not hovered
     themeBtn.icon = themeIcon
     titleBar.themeIcon = themeIcon  -- Store reference
-
-    -- Pressed state
-    themeBtn:SetScript("OnMouseDown", function() themeIcon:SetAtlas("decor-ability-alterations-pressed") end)
-    themeBtn:SetScript("OnMouseUp", function() themeIcon:SetAtlas("decor-ability-alterations-active") end)
 
     -- Update icon (no-op now since it's an atlas)
     local function UpdateThemeIcon()

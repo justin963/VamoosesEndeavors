@@ -2,6 +2,28 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.6 (Released January 2026)
+--------------------------------------------------------------------------------
+
+BUG FIXES:
+- Fixed housing and endeavor data not loading on login
+  - Housing APIs now called with 1.5s delay to wait for server data
+  - Added PLAYER_ENTERING_WORLD handler for reliable initialization
+  - SetViewingNeighborhood() now called before requesting initiative info
+
+NEW FEATURES:
+- Initiative Name Collection: Tracks discovered initiative types over time
+  - Run /ve initiatives to see all initiative types you've encountered
+  - Data persists across sessions and builds as initiatives rotate
+  - Useful for discovering the full list of housing endeavor types
+
+UI IMPROVEMENTS:
+- Updated minimize button icon (Map-Filter-Button atlas)
+- Updated theme toggle button icon (Crosshair_Transmogrify_32 atlas)
+- Consistent 18x18 size and 0.85 brightness for title bar icons
+
+--------------------------------------------------------------------------------
+
 Version 1.5.5 (Released January 2026)
 --------------------------------------------------------------------------------
 

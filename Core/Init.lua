@@ -9,6 +9,151 @@ VE.frame:RegisterEvent("ADDON_LOADED")
 VE.frame:RegisterEvent("PLAYER_LOGIN")
 VE.frame:RegisterEvent("PLAYER_LOGOUT")
 
+-- Debug window for roster data (with copy support)
+function VE:ShowDebugWindow(title, contentFunc)
+    if not self.debugFrame then
+        local f = CreateFrame("Frame", "VE_DebugFrame", UIParent, "BackdropTemplate")
+        f:SetSize(600, 500)
+        f:SetPoint("CENTER")
+        f:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background", edgeFile = "Interface/Tooltips/UI-Tooltip-Border", edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+        f:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+        f:SetFrameStrata("DIALOG")
+
+        local titleText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        titleText:SetPoint("TOP", 0, -10)
+        f.titleText = titleText
+
+        local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        closeBtn:SetPoint("TOPRIGHT", -2, -2)
+
+        local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 10, -35)
+        scroll:SetPoint("BOTTOMRIGHT", -30, 10)
+
+        -- Use EditBox for copy support
+        local editBox = CreateFrame("EditBox", nil, scroll)
+        editBox:SetMultiLine(true)
+        editBox:SetFontObject(GameFontHighlightSmall)
+        editBox:SetWidth(540)
+        editBox:SetAutoFocus(false)
+        editBox:EnableMouse(true)
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scroll:SetScrollChild(editBox)
+        f.editBox = editBox
+
+        self.debugFrame = f
+    end
+
+    self.debugFrame.titleText:SetText(title)
+    local content = type(contentFunc) == "function" and contentFunc() or contentFunc
+    -- Strip color codes for plain text copy
+    local plainContent = content:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    self.debugFrame.editBox:SetText(plainContent)
+    self.debugFrame.editBox:SetHeight(self.debugFrame.editBox:GetNumLines() * 14 + 20)
+    self.debugFrame.editBox:HighlightText()
+    self.debugFrame:Show()
+end
+
+-- Roster debug callback - dump all args to find the data
+local function OnRosterUpdate(arg1, arg2, arg3)
+    local lines = { "=== Roster Data Received ===\n" }
+
+    local function dumpTable(tbl, indent, maxDepth)
+        indent = indent or ""
+        maxDepth = maxDepth or 2
+        if maxDepth <= 0 then return "(max depth)" end
+
+        local result = {}
+        for k, v in pairs(tbl) do
+            if type(v) == "table" then
+                table.insert(result, indent .. tostring(k) .. " = {")
+                table.insert(result, dumpTable(v, indent .. "  ", maxDepth - 1))
+                table.insert(result, indent .. "}")
+            else
+                table.insert(result, indent .. tostring(k) .. " = " .. tostring(v))
+            end
+        end
+        return table.concat(result, "\n")
+    end
+
+    -- Dump arg1
+    table.insert(lines, "--- arg1 (type: " .. type(arg1) .. ") ---")
+    if type(arg1) == "table" then
+        table.insert(lines, "  count: " .. #arg1)
+        if #arg1 > 0 then
+            table.insert(lines, "  First item:")
+            table.insert(lines, dumpTable(arg1[1], "    ", 2))
+        elseif next(arg1) then
+            table.insert(lines, "  (hash table):")
+            table.insert(lines, dumpTable(arg1, "    ", 2))
+        end
+    end
+
+    -- Dump arg2
+    table.insert(lines, "\n--- arg2 (type: " .. type(arg2) .. ") ---")
+    if type(arg2) == "table" then
+        table.insert(lines, "  count: " .. #arg2)
+        if #arg2 > 0 then
+            for i = 1, math.min(3, #arg2) do
+                table.insert(lines, "  Member " .. i .. ":")
+                table.insert(lines, dumpTable(arg2[i], "    ", 2))
+            end
+            if #arg2 > 3 then
+                table.insert(lines, "  ... (" .. (#arg2 - 3) .. " more)")
+            end
+        elseif next(arg2) then
+            table.insert(lines, "  (hash table):")
+            table.insert(lines, dumpTable(arg2, "    ", 2))
+        end
+    end
+
+    -- Dump arg3
+    if arg3 then
+        table.insert(lines, "\n--- arg3 (type: " .. type(arg3) .. ") ---")
+        if type(arg3) == "table" then
+            table.insert(lines, dumpTable(arg3, "  ", 2))
+        else
+            table.insert(lines, "  " .. tostring(arg3))
+        end
+    end
+
+    VE:ShowDebugWindow("Neighborhood Roster", table.concat(lines, "\n"))
+end
+
+-- Try to register via EventRegistry (modern Blizzard event system)
+-- Try multiple possible event names since we don't know the exact one
+if EventRegistry then
+    local possibleEvents = {
+        "HousingNeighborhoodRosterUpdate",
+        "UpdateBulletinBoardRoster",
+        "NeighborhoodRosterUpdate",
+        "BulletinBoardRosterUpdate",
+        "NEIGHBORHOOD_ROSTER_UPDATE",
+        "HousingNeighborhood.RosterUpdate",
+    }
+    for _, eventName in ipairs(possibleEvents) do
+        pcall(function()
+            EventRegistry:RegisterCallback(eventName, OnRosterUpdate, "VE_RosterDebug_" .. eventName)
+        end)
+    end
+end
+
+-- Also try classic frame event registration
+local rosterEventFrame = CreateFrame("Frame")
+rosterEventFrame:SetScript("OnEvent", function(self, event, ...)
+    print("|cFF00FF00[VE]|r Event fired: " .. event)
+    OnRosterUpdate(...)
+end)
+-- Register possible classic events
+pcall(function() rosterEventFrame:RegisterEvent("UPDATE_BULLETIN_BOARD_ROSTER") end)
+pcall(function() rosterEventFrame:RegisterEvent("NEIGHBORHOOD_ROSTER_UPDATE") end)
+pcall(function() rosterEventFrame:RegisterEvent("HOUSING_NEIGHBORHOOD_ROSTER_UPDATE") end)
+
 function VE:OnInitialize()
     -- Initialize SavedVariables
     VE_DB = VE_DB or {}
@@ -462,6 +607,36 @@ SlashCmdList["VE"] = function(msg)
         else
             print("  C_NeighborhoodInitiative not available")
         end
+    elseif command == "roster" then
+        -- Debug: request roster and show in a scrollable window
+        print("|cFF2aa198[VE]|r Requesting neighborhood roster...")
+        if C_HousingNeighborhood and C_HousingNeighborhood.RequestNeighborhoodRoster then
+            C_HousingNeighborhood.RequestNeighborhoodRoster()
+            print("  Request sent - waiting for event callback...")
+        else
+            print("  C_HousingNeighborhood.RequestNeighborhoodRoster not available")
+        end
+    elseif command == "apis" then
+        -- Debug: search ALL globals for housing/neighborhood related APIs
+        VE:ShowDebugWindow("Housing APIs", function()
+            local lines = {}
+            for k, v in pairs(_G) do
+                local kLower = tostring(k):lower()
+                if kLower:find("housing") or kLower:find("neighborhood") or kLower:find("bulletin") then
+                    if type(v) == "table" then
+                        table.insert(lines, "|cFFFFFF00" .. k .. "|r (table):")
+                        for funcName, funcVal in pairs(v) do
+                            if type(funcVal) == "function" then
+                                table.insert(lines, "  ." .. funcName .. "()")
+                            end
+                        end
+                    elseif type(v) == "function" then
+                        table.insert(lines, k .. "()")
+                    end
+                end
+            end
+            return table.concat(lines, "\n")
+        end)
     elseif command == "house" then
         -- Debug: dump C_Housing API data
         print("|cFF2aa198[VE]|r Housing API Debug:")
@@ -504,6 +679,20 @@ SlashCmdList["VE"] = function(msg)
                 end
             end
         end
+    elseif command == "initiatives" then
+        -- Debug: list all known initiative types collected over time
+        local known = VE.Store:GetState().knownInitiatives
+        local count = 0
+        for _ in pairs(known) do count = count + 1 end
+        print("|cFF2aa198[VE]|r Known Initiatives (" .. count .. " discovered):")
+        if count == 0 then
+            print("  No initiatives discovered yet. Play the game to collect them!")
+        else
+            for id, data in pairs(known) do
+                local firstSeen = data.firstSeen and date("%Y-%m-%d", data.firstSeen) or "?"
+                print(string.format("  [%d] %s (first seen: %s)", id, data.title, firstSeen))
+            end
+        end
     else
         print("|cFF2aa198[VE]|r Commands:")
         print("  /ve - Toggle window")
@@ -519,5 +708,8 @@ SlashCmdList["VE"] = function(msg)
         print("  /ve allcurrencies - List currencies with qty > 0")
         print("  /ve activity - Dump activity log APIs")
         print("  /ve house - Debug housing API")
+        print("  /ve initiatives - List discovered initiative types")
+        print("  /ve roster - Request roster data (shows in window)")
+        print("  /ve apis - List all housing APIs (shows in window)")
     end
 end

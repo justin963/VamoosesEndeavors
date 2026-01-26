@@ -2,7 +2,7 @@
 ## Title: Vamoose's Endeavors
 ## Notes: Track Housing Endeavor progress across all your characters
 ## Author: Vamoose
-## Version: 1.5.5
+## Version: 1.5.6
 ## SavedVariables: VE_DB
 ## IconTexture: Interface\Icons\Garrison_Building_Storehouse
 

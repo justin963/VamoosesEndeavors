@@ -6,11 +6,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.5 - Active Neighborhood Display**
+## **What's New in v1.5.6 - Auto-Load Fix & Initiative Tracking**
 
-- **Active Neighborhood Indicator** - See which house is your active endeavor destination below the dropdown
-- **Automatic Updates** - Active display updates when changed via VE button or Blizzard's dashboard
-- **Fixed Dashboard Conflicts** - VE no longer overrides Blizzard's Housing Dashboard neighborhood selection
+- **Fixed Auto-Load** - Housing and endeavor data now loads reliably on login without opening the Housing Dashboard
+- **Initiative Collection** - Discover all initiative types as you play; run `/ve initiatives` to see your collection
+- **UI Refinements** - Updated minimize and theme button icons for a cleaner look
 
 *See CHANGELOG.txt for complete version history*
 
@@ -130,5 +130,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.5
+**Version:** 1.5.6
 **Game Version:** 12.0.0+ (Midnight)

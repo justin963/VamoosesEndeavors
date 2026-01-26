@@ -243,17 +243,26 @@ function VE:CreateMainWindow()
     houseLevelText:SetText("")
     frame.houseLevelText = houseLevelText
 
+    -- Active neighborhood container
+    local activeContainer = CreateFrame("Frame", nil, dropdownRow)
+    activeContainer:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 0, 0)
+    activeContainer:SetSize(165, 20)
+    frame.activeContainer = activeContainer
+
     -- Active neighborhood icon (below dropdown, aligned to left edge)
-    local activeIcon = dropdownRow:CreateTexture(nil, "ARTWORK")
+    local activeIcon = activeContainer:CreateTexture(nil, "ARTWORK")
     activeIcon:SetSize(16, 16)
-    activeIcon:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", 3, -2)
+    activeIcon:SetPoint("LEFT", 3, 0)
     activeIcon:SetAtlas("housing-map-plot-player-house-highlight")
     frame.activeIcon = activeIcon
 
-    -- Active neighborhood text (after icon)
-    local activeNeighborhoodText = dropdownRow:CreateFontString(nil, "OVERLAY")
+    -- Active neighborhood text (after icon, width-limited)
+    local activeNeighborhoodText = activeContainer:CreateFontString(nil, "OVERLAY")
     activeNeighborhoodText:SetPoint("LEFT", activeIcon, "RIGHT", 4, 0)
     activeNeighborhoodText:SetJustifyH("LEFT")
+    activeNeighborhoodText:SetWidth(140)
+    activeNeighborhoodText:SetWordWrap(false)
+    activeNeighborhoodText:SetNonSpaceWrap(false)
     VE.Theme.ApplyFont(activeNeighborhoodText, C, "small")
     activeNeighborhoodText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
     activeNeighborhoodText._colorType = "text_dim"
@@ -265,8 +274,8 @@ function VE:CreateMainWindow()
     -- ========================================================================
     local statsRow = CreateFrame("Frame", nil, headerSection)
     statsRow:SetHeight(16)
-    statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", -4, -4)
-    statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", -4, -4)
+    statsRow:SetPoint("TOPLEFT", dropdownRow, "BOTTOMLEFT", -4, -2)
+    statsRow:SetPoint("TOPRIGHT", dropdownRow, "BOTTOMRIGHT", -4, -2)
 
     -- Contribution value (right-most)
     local xpValue = statsRow:CreateFontString(nil, "OVERLAY")

@@ -215,8 +215,9 @@ function Tracker:OnEvent(event, ...)
         -- Notify UI about house list update
         VE.EventBus:Trigger("VE_HOUSE_LIST_UPDATED", { houseList = self.houseList, selectedIndex = selectedIndex })
 
-        -- Request data for current viewing neighborhood (don't change viewing context - respect Blizzard dashboard)
-        if C_NeighborhoodInitiative then
+        -- Set viewing neighborhood and request data (must set context first like Blizzard dashboard)
+        if C_NeighborhoodInitiative and neighborhoodGUID then
+            C_NeighborhoodInitiative.SetViewingNeighborhood(neighborhoodGUID)
             C_NeighborhoodInitiative.RequestNeighborhoodInitiativeInfo()
             self:RequestActivityLog()
         end
@@ -516,6 +517,14 @@ function Tracker:ProcessInitiativeInfo(info)
         description = info.description,
         initiativeID = info.initiativeID,
     })
+
+    -- Record initiative for collection (builds database over time)
+    if info.initiativeID and info.initiativeID > 0 and info.title then
+        VE.Store:Dispatch("RECORD_INITIATIVE", {
+            initiativeID = info.initiativeID,
+            title = info.title,
+        })
+    end
 
     -- Process tasks
     local tasks = {}

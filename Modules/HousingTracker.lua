@@ -23,6 +23,7 @@ function Tracker:Initialize()
     self.frame:RegisterEvent("HOUSE_LEVEL_FAVOR_UPDATED")
     self.frame:RegisterEvent("HOUSE_LEVEL_CHANGED")
     self.frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+    self.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     self.frame:SetScript("OnEvent", function(frame, event, ...)
         self:OnEvent(event, ...)
@@ -31,6 +32,12 @@ function Tracker:Initialize()
     if VE.Store:GetState().config.debug then
         print("|cFF2aa198[VE Housing]|r Initialized")
     end
+
+    -- Delay initial request - housing APIs need server data to be ready
+    C_Timer.After(1.5, function()
+        self:RequestHouseInfo()
+        self:UpdateCoupons()
+    end)
 end
 
 -- ============================================================================
@@ -63,6 +70,16 @@ function Tracker:OnEvent(event, ...)
             self.couponUpdateTimer = nil
             self:UpdateCoupons()
         end)
+
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        local isLogin, isReload = ...
+        if isLogin or isReload then
+            -- Refresh housing data on login/reload
+            C_Timer.After(1.5, function()
+                self:RequestHouseInfo()
+                self:UpdateCoupons()
+            end)
+        end
     end
 end
 

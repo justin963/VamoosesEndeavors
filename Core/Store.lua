@@ -52,6 +52,8 @@ local DEFAULT_STATE = {
         coupons = 0,
         couponsIcon = nil,
     },
+    -- Known initiative types (collected over time)
+    knownInitiatives = {},  -- {[initiativeID] = {title, firstSeen, lastSeen}}
 }
 
 -- Deep copy helper
@@ -126,6 +128,11 @@ function VE.Store:LoadFromSavedVariables()
         self.state.ui.selectedCharacter = VE_DB.ui.selectedCharacter
     end
 
+    -- Restore known initiatives (account-wide collection)
+    if VE_DB.knownInitiatives then
+        self.state.knownInitiatives = VE_DB.knownInitiatives
+    end
+
     if self.state.config.debug then
         print("|cFF2aa198[VE Store]|r Loaded state from SavedVariables")
     end
@@ -162,6 +169,9 @@ function VE.Store:SaveToSavedVariables()
     VE_DB.ui = {
         selectedCharacter = self.state.ui.selectedCharacter,
     }
+
+    -- Save known initiatives (account-wide collection)
+    VE_DB.knownInitiatives = self.state.knownInitiatives
 
     if self.state.config.debug then
         print("|cFF2aa198[VE Store]|r Saved state to SavedVariables")
@@ -280,5 +290,19 @@ end)
 VE.Store:RegisterReducer("SET_BG_OPACITY", function(state, payload)
     local newState = DeepCopy(state)
     newState.config.bgOpacity = payload.opacity or 0.9
+    return newState
+end)
+
+-- RECORD_INITIATIVE: Track discovered initiative types
+VE.Store:RegisterReducer("RECORD_INITIATIVE", function(state, payload)
+    if not payload.initiativeID or payload.initiativeID == 0 then return state end
+    local newState = DeepCopy(state)
+    local id = payload.initiativeID
+    local existing = state.knownInitiatives[id]
+    newState.knownInitiatives[id] = {
+        title = payload.title or (existing and existing.title) or "Unknown",
+        firstSeen = existing and existing.firstSeen or time(),
+        lastSeen = time(),
+    }
     return newState
 end)
