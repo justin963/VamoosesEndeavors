@@ -691,6 +691,9 @@ SlashCmdList["VE"] = function(msg)
             for id, data in pairs(known) do
                 local firstSeen = data.firstSeen and date("%Y-%m-%d", data.firstSeen) or "?"
                 print(string.format("  [%d] %s (first seen: %s)", id, data.title, firstSeen))
+                if data.description and data.description ~= "" then
+                    print(string.format("      %s", data.description))
+                end
             end
         end
     else

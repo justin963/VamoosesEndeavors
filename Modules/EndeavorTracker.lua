@@ -523,6 +523,7 @@ function Tracker:ProcessInitiativeInfo(info)
         VE.Store:Dispatch("RECORD_INITIATIVE", {
             initiativeID = info.initiativeID,
             title = info.title,
+            description = info.description,
         })
     end
 

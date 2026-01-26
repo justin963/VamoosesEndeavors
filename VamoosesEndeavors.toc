@@ -25,4 +25,5 @@ UI/Minimap.lua
 UI/Tabs/Endeavors.lua
 UI/Tabs/Leaderboard.lua
 UI/Tabs/Activity.lua
+UI/Tabs/Info.lua
 UI/Tabs/Config.lua

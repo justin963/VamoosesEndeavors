@@ -10,7 +10,8 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 - **Fixed Auto-Load** - Housing and endeavor data now loads reliably on login without opening the Housing Dashboard
 - **Initiative Collection** - Discover all initiative types as you play; run `/ve initiatives` to see your collection
-- **UI Refinements** - Updated minimize and theme button icons for a cleaner look
+- **Info Tab** - Browse collected initiative types with collapsible details showing descriptions and dates
+- **UI Refinements** - Updated icons and polished tab bar layout
 
 *See CHANGELOG.txt for complete version history*
 

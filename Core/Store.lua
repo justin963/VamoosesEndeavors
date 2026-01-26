@@ -301,6 +301,7 @@ VE.Store:RegisterReducer("RECORD_INITIATIVE", function(state, payload)
     local existing = state.knownInitiatives[id]
     newState.knownInitiatives[id] = {
         title = payload.title or (existing and existing.title) or "Unknown",
+        description = payload.description or (existing and existing.description) or "",
         firstSeen = existing and existing.firstSeen or time(),
         lastSeen = time(),
     }

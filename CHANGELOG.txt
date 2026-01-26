@@ -16,11 +16,15 @@ NEW FEATURES:
   - Run /ve initiatives to see all initiative types you've encountered
   - Data persists across sessions and builds as initiatives rotate
   - Useful for discovering the full list of housing endeavor types
+- Info Tab: Browse collected initiative types with collapsible details
+  - Shows title, description, ID, and first/last seen dates
+  - Encourages community contribution to expand the database
 
 UI IMPROVEMENTS:
 - Updated minimize button icon (Map-Filter-Button atlas)
 - Updated theme toggle button icon (Crosshair_Transmogrify_32 atlas)
 - Consistent 18x18 size and 0.85 brightness for title bar icons
+- Polished tab bar layout with improved button sizing and spacing
 
 --------------------------------------------------------------------------------
 

@@ -78,30 +78,34 @@ function VE:CreateMainWindow()
     VE.Theme:Register(tabBar, "TabBar")
 
     -- Create tab buttons (via factory method with Theme Engine registration)
-    -- Calculate equal tab width: (window width - 2 * padding) / num tabs
-    local PADDING = 4
-    local NUM_TABS = 4
-    local tabWidth = math.floor((uiConsts.mainWidth - (2 * PADDING)) / NUM_TABS)
+    -- Calculate equal tab width to fill entire bar
+    local NUM_TABS = 5
+    local tabWidth = (uiConsts.mainWidth / NUM_TABS) + 8
 
     local endeavorsTabBtn = VE.UI:CreateTabButton(tabBar, "Endeavors")
     endeavorsTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    endeavorsTabBtn:SetPoint("LEFT", PADDING, 0)
+    endeavorsTabBtn:SetPoint("LEFT", 4, 0)
 
     local leaderboardTabBtn = VE.UI:CreateTabButton(tabBar, "Rankings")
     leaderboardTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    leaderboardTabBtn:SetPoint("LEFT", endeavorsTabBtn, "RIGHT", 0, 0)
+    leaderboardTabBtn:SetPoint("LEFT", endeavorsTabBtn, "RIGHT", -10, 0)
 
     local activityTabBtn = VE.UI:CreateTabButton(tabBar, "Activity")
     activityTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    activityTabBtn:SetPoint("LEFT", leaderboardTabBtn, "RIGHT", 0, 0)
+    activityTabBtn:SetPoint("LEFT", leaderboardTabBtn, "RIGHT", -10, 0)
+
+    local infoTabBtn = VE.UI:CreateTabButton(tabBar, "Info")
+    infoTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
+    infoTabBtn:SetPoint("LEFT", activityTabBtn, "RIGHT", -10, 0)
 
     local configTabBtn = VE.UI:CreateTabButton(tabBar, "Config")
     configTabBtn:SetSize(tabWidth, uiConsts.tabHeight or 24)
-    configTabBtn:SetPoint("LEFT", activityTabBtn, "RIGHT", 0, 0)
+    configTabBtn:SetPoint("LEFT", infoTabBtn, "RIGHT", -10, 0)
 
     frame.endeavorsTabBtn = endeavorsTabBtn
     frame.leaderboardTabBtn = leaderboardTabBtn
     frame.activityTabBtn = activityTabBtn
+    frame.infoTabBtn = infoTabBtn
     frame.configTabBtn = configTabBtn
 
     -- Update housing display (coupons + house level) from Store
@@ -558,6 +562,12 @@ function VE:CreateMainWindow()
     configTab:Hide()
     frame.configTab = configTab
 
+    -- Info tab (initiative collection)
+    local infoTab = VE.UI.Tabs:CreateInfo(content)
+    infoTab:SetAllPoints()
+    infoTab:Hide()
+    frame.infoTab = infoTab
+
     -- ========================================================================
     -- TAB SWITCHING
     -- ========================================================================
@@ -567,12 +577,14 @@ function VE:CreateMainWindow()
         endeavorsTab:Hide()
         leaderboardTab:Hide()
         activityTab:Hide()
+        infoTab:Hide()
         configTab:Hide()
 
         -- Deactivate all buttons
         endeavorsTabBtn:SetActive(false)
         leaderboardTabBtn:SetActive(false)
         activityTabBtn:SetActive(false)
+        infoTabBtn:SetActive(false)
         configTabBtn:SetActive(false)
 
         -- Show selected tab
@@ -586,6 +598,9 @@ function VE:CreateMainWindow()
         elseif tabName == "activity" then
             activityTab:Show()
             activityTabBtn:SetActive(true)
+        elseif tabName == "info" then
+            infoTab:Show()
+            infoTabBtn:SetActive(true)
         elseif tabName == "config" then
             configTab:Show()
             configTabBtn:SetActive(true)
@@ -602,6 +617,10 @@ function VE:CreateMainWindow()
 
     activityTabBtn:SetScript("OnClick", function()
         ShowTab("activity")
+    end)
+
+    infoTabBtn:SetScript("OnClick", function()
+        ShowTab("info")
     end)
 
     configTabBtn:SetScript("OnClick", function()
