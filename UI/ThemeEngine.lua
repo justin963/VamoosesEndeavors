@@ -329,10 +329,14 @@ VE.Theme.Skinners = {
             ApplyFont(f.progress, c)
         end
         if f.points then
-            -- Use success color (green) for Atlas theme, endeavor for others
-            local pointsColor = (c.atlas and c.atlas.xpBanner) and c.success or c.endeavor
-            if pointsColor then
-                f.points:SetTextColor(pointsColor.r, pointsColor.g, pointsColor.b, pointsColor.a)
+            -- Use error color if row has 0 XP warning, otherwise success color
+            if f._isNoXPWarning then
+                f.points:SetTextColor(c.error.r, c.error.g, c.error.b)
+            else
+                local pointsColor = c.success
+                if pointsColor then
+                    f.points:SetTextColor(pointsColor.r, pointsColor.g, pointsColor.b, pointsColor.a)
+                end
             end
             ApplyFont(f.points, c)
         end

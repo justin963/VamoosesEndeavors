@@ -188,8 +188,14 @@ function VE.UI.Tabs:CreateActivity(parent)
             print("|cffff9900VE:|r No activity data to export.")
             return
         end
+        -- Build taskID -> isRepeatable lookup from Store
+        local repeatableLookup = {}
+        local tasks = VE.Store:GetState().tasks or {}
+        for _, t in ipairs(tasks) do
+            if t.id then repeatableLookup[t.id] = t.isRepeatable end
+        end
         -- Build CSV string
-        local csv = "Player,Task,XP,Time\n"
+        local csv = "Player,Task,XP,Time,Repeatable\n"
         for _, entry in ipairs(activityData.taskActivity) do
             local player = entry.playerName or "Unknown"
             local task = entry.taskName or "Unknown"
@@ -200,7 +206,8 @@ function VE.UI.Tabs:CreateActivity(parent)
             end
             -- Escape commas in task names
             task = task:gsub(",", ";")
-            csv = csv .. string.format("%s,%s,%d,%s\n", player, task, xp, timeStr)
+            local repeatable = repeatableLookup[entry.taskID] and "Yes" or "No"
+            csv = csv .. string.format("%s,%s,%.3f,%s,%s\n", player, task, xp, timeStr, repeatable)
         end
         -- Show in popup window
         VE.UI:ShowCSVExportWindow(csv, #activityData.taskActivity)

@@ -6,12 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.7 - Activity Filters & Task Tooltips**
+## **What's New in v1.5.8 - Next Best Endeavor Prediction**
 
-- **Activity Tab Filters** - Filter activity by "Me Only", "My Chars", or specific task type
-- **CSV Export** - Export activity log data for external analysis
-- **Task Tooltip XP** - Hover over tasks to see Base and Last Contribution values
-- **Per-Player Tracking** - XP display shows your character's personal contribution data
+- **Predicted XP with Diminishing Returns** - Full DR formula calculates your actual next XP reward
+- **Best Task Highlighting** - Gold/silver/bronze tints show top 3 tasks by predicted XP
+- **Sort by Next XP** - Order tasks by best reward, accounting for roster scale and completions
+- **Zero XP Warning** - Red highlight warns when tasks give no XP due to DR or completion cap
 
 *See CHANGELOG.txt for complete version history*
 
@@ -138,5 +138,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.7
+**Version:** 1.5.8
 **Game Version:** 12.0.0+ (Midnight)

@@ -658,10 +658,37 @@ function VE.UI:CreateTaskRow(parent, options)
     progress:SetTextColor(Colors.text_dim.r, Colors.text_dim.g, Colors.text_dim.b)
     row.progress = progress
 
+    -- Rank medal indicator (top-left of XP badge)
+    local rankMedal = pointsBg:CreateTexture(nil, "OVERLAY", nil, 2)
+    rankMedal:SetSize(14, 14)
+    rankMedal:SetPoint("TOPLEFT", pointsBg, "TOPLEFT", -4, 4)
+    rankMedal:Hide()
+    row.rankMedal = rankMedal
+
+    -- Medal atlases by rank
+    row.rankMedals = {
+        [1] = "challenges-medal-gold",
+        [2] = "challenges-medal-silver",
+        [3] = "challenges-medal-bronze",
+    }
+
+    -- Store rank colors (gold, silver, bronze)
+    row.rankColors = {
+        [1] = { r = 1.0, g = 0.84, b = 0.0 },   -- Gold
+        [2] = { r = 0.75, g = 0.75, b = 0.75 }, -- Silver
+        [3] = { r = 0.80, g = 0.50, b = 0.20 }, -- Bronze
+    }
+    row.rankTints = {
+        [1] = { r = 1.0, g = 0.84, b = 0.0, a = 0.15 },   -- Gold tint
+        [2] = { r = 0.75, g = 0.75, b = 0.75, a = 0.12 }, -- Silver tint
+        [3] = { r = 0.80, g = 0.50, b = 0.20, a = 0.12 }, -- Bronze tint
+    }
+
     -- Update function
-    function row:SetTask(task)
+    function row:SetTask(task, ranking)
         local C = GetScheme()  -- Re-fetch for current theme
         self.task = task
+        self.ranking = ranking  -- Store for tooltip
         self.name:SetText(task.name or "Unknown Task")
         self.points:SetText(tostring(task.points or 0))
 
@@ -720,6 +747,55 @@ function VE.UI:CreateTaskRow(parent, options)
         else
             self.trackMark:Hide()
         end
+
+        -- XP text uses success color for all themes (each theme defines success)
+        local pointsColor = C.success
+
+        -- Apply ranking tint and medal for top 3 "next XP" tasks
+        if ranking and ranking.rank and ranking.rank >= 1 and ranking.rank <= 3 then
+            local rank = ranking.rank
+            local tint = self.rankTints[rank]
+            -- Store tint for OnLeave to restore
+            self._rankTint = tint
+            -- Apply background tint
+            self:SetBackdropColor(tint.r, tint.g, tint.b, tint.a)
+            -- Reset XP text to themed color (in case it was warning before)
+            self.points:SetTextColor(pointsColor.r, pointsColor.g, pointsColor.b)
+            -- Show medal
+            self.rankMedal:SetAtlas(self.rankMedals[rank])
+            self.rankMedal:Show()
+        else
+            -- Hide medal
+            self.rankMedal:Hide()
+            -- Check if task gives 0 XP (warning highlight)
+            local showNoXPWarning = false
+            if not task.completed and VE.EndeavorTracker then
+                if task.isRepeatable then
+                    -- Repeatable: check if API points is 0 OR next completion gives 0 XP
+                    local completions = VE.EndeavorTracker:GetAccountCompletionCount(task.id)
+                    local nextXP = VE.EndeavorTracker:CalculateNextContribution(task.name, completions)
+                    showNoXPWarning = (task.points == 0) or (nextXP == 0)
+                elseif not task.isRepeatable then
+                    -- Non-repeatable: no warning if not completed (will give XP on first/only completion)
+                    showNoXPWarning = false
+                end
+            end
+            if showNoXPWarning then
+                -- Apply warning tint for 0 XP tasks (use theme's error color)
+                self._isNoXPWarning = true
+                self._rankTint = { r = C.error.r, g = C.error.g, b = C.error.b, a = 0.18 }
+                self:SetBackdropColor(C.error.r, C.error.g, C.error.b, 0.18)
+                -- Also color the XP text to match warning
+                self.points:SetTextColor(C.error.r, C.error.g, C.error.b)
+            else
+                -- Clear warning flag and rank tint, reset to default
+                self._isNoXPWarning = false
+                self._rankTint = nil
+                self:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.5)
+                -- Reset XP text to themed color
+                self.points:SetTextColor(pointsColor.r, pointsColor.g, pointsColor.b)
+            end
+        end
     end
 
     -- Toggle tracking state
@@ -758,30 +834,31 @@ function VE.UI:CreateTaskRow(parent, options)
             if self.task.description and self.task.description ~= "" then
                 GameTooltip:AddLine(self.task.description, nil, nil, nil, true)
             end
-            -- Show times completed for repeatable tasks
-            if self.task.isRepeatable and self.task.timesCompleted then
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Completed: " .. self.task.timesCompleted .. " times", 0.5, 0.8, 0.5)
+            -- Show base endeavor XP
+            if self.task.points and self.task.points > 0 then
+                GameTooltip:AddLine(string.format("Base XP: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
             end
             -- Show coupon reward info
             if self.task.couponReward and self.task.couponReward > 0 then
                 local label = self.task.isRepeatable and "Base reward" or "Reward"
                 GameTooltip:AddLine(label .. ": +" .. self.task.couponReward .. " coupons", c.accent.r, c.accent.g, c.accent.b)
-                if self.task.isRepeatable and self.task.timesCompleted and self.task.timesCompleted > 0 then
-                    GameTooltip:AddLine("(Decreases with completions)", 0.5, 0.5, 0.5)
-                end
             end
-            -- Show base endeavor XP contribution
-            if self.task.points and self.task.points > 0 then
-                GameTooltip:AddLine(string.format("Base Contribution: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
+            -- Show times completed for repeatable tasks
+            if self.task.isRepeatable and self.task.timesCompleted and self.task.timesCompleted > 0 then
+                GameTooltip:AddLine("Completed: " .. self.task.timesCompleted .. " times", 0.5, 0.8, 0.5)
             end
-            -- Show current character's last contribution
-            if VE.EndeavorTracker and self.task.id then
-                local myXP = VE.EndeavorTracker:GetTaskXPForCurrentPlayer(self.task.id)
-                if myXP then
-                    GameTooltip:AddLine(string.format("Last Contribution: %.2f", myXP), c.text_dim.r, c.text_dim.g, c.text_dim.b)
+            -- Show next XP prediction for repeatable tasks
+            if self.task.isRepeatable and not self.task.completed and VE.EndeavorTracker then
+                if self.ranking and self.ranking.nextXP then
+                    -- Ranked task (top 3) - show with rank label and color
+                    local rankLabels = { "Best", "2nd Best", "3rd Best" }
+                    local rankColor = self.rankColors[self.ranking.rank] or { r = 1, g = 1, b = 1 }
+                    GameTooltip:AddLine(string.format("%s Next Endeavor: +%.3f", rankLabels[self.ranking.rank] or "", self.ranking.nextXP), rankColor.r, rankColor.g, rankColor.b)
                 else
-                    GameTooltip:AddLine("0 - not completed", c.text_dim.r, c.text_dim.g, c.text_dim.b)
+                    -- Non-ranked task - calculate on-the-fly
+                    local completions = VE.EndeavorTracker:GetAccountCompletionCount(self.task.id)
+                    local nextXP = VE.EndeavorTracker:CalculateNextContribution(self.task.name, completions)
+                    GameTooltip:AddLine(string.format("Next XP: +%.3f", nextXP), 0.7, 0.7, 0.7)
                 end
             end
             -- Tracking hint
@@ -798,7 +875,12 @@ function VE.UI:CreateTaskRow(parent, options)
     end)
     row:SetScript("OnLeave", function(self)
         local c = self._scheme or GetScheme()
-        self:SetBackdropColor(c.panel.r, c.panel.g, c.panel.b, c.panel.a * 0.5)
+        -- Restore rank tint if present, otherwise default panel color
+        if self._rankTint then
+            self:SetBackdropColor(self._rankTint.r, self._rankTint.g, self._rankTint.b, self._rankTint.a)
+        else
+            self:SetBackdropColor(c.panel.r, c.panel.g, c.panel.b, c.panel.a * 0.5)
+        end
         GameTooltip:Hide()
     end)
 

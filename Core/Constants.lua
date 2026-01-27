@@ -228,6 +228,48 @@ VE.Constants.CURRENCY_IDS = {
 }
 
 -- ============================================================================
+-- 5. ENDEAVOR XP FORMULA CONSTANTS
+-- ============================================================================
+
+-- Roster Scale tiers (neighborhood size affects XP scaling)
+VE.Constants.ROSTER_SCALE = {
+    TIER_1_2 = 0.04024,   -- 1-2 characters
+    TIER_3_5 = 0.03912,   -- 3-5 characters
+    TIER_6_10 = 0.03712,  -- 6-10 characters
+    TIER_11_PLUS = 0.02970, -- 11+ characters
+    -- Thresholds for tier detection
+    TIERS = {
+        { min = 1, max = 2, scale = 0.04024 },
+        { min = 3, max = 5, scale = 0.03912 },
+        { min = 6, max = 10, scale = 0.03712 },
+        { min = 11, max = 999, scale = 0.02970 },
+    },
+}
+
+-- Task multipliers (certain tasks have bonus XP)
+VE.Constants.TASK_MULTIPLIERS = {
+    STANDARD = 1.0,
+    RAID_BOSS = 2.0,
+    PROFESSION_RARE = 1.2,
+}
+
+-- Base XP values by task name patterns
+VE.Constants.TASK_BASE_VALUES = {
+    -- Base 50 tasks
+    ["Weekly"] = 50, ["Good Neighbor"] = 50, ["Daily Quests"] = 50,
+    ["Froststone"] = 50, ["War Creche"] = 50, ["Lumber"] = 50,
+    ["Champion a Faction"] = 10, ["Faction Envoy"] = 10,
+    -- Base 25 tasks
+    ["Pet Battle"] = 25, ["Forbidden Hoard"] = 25, ["Sealed Scrolls"] = 25,
+    ["Vault Doors"] = 25, ["Kill Rares"] = 25, ["Gather"] = 25, ["Creatures"] = 25,
+    -- Special tasks
+    ["Profession Rare"] = 150,
+    -- Base 10 tasks
+    ["Skyriding"] = 10, ["Delves"] = 10, ["Mythic"] = 10, ["Raid Boss"] = 10,
+    ["Honor"] = 10, ["World Quests"] = 10,
+}
+
+-- ============================================================================
 -- 5. HELPER FUNCTIONS
 -- ============================================================================
 

@@ -2,6 +2,50 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.5.8 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Next Best Task Highlighting: Gold/silver/bronze tints show top 3 tasks by XP
+  - Ranks incomplete repeatable tasks by predicted next XP reward
+  - Medal icons (gold/silver/bronze) on XP badge for ranked tasks
+  - Background tint persists on hover (restores on mouse leave)
+  - Tooltip shows "Best/2nd Best/3rd Best Next Endeavor: +X.XXX XP"
+  - Toggle button in section header to show/hide highlighting
+  - Sort by Next XP button to order tasks by predicted contribution
+
+- Zero XP Warning: Red highlight for tasks that give no XP
+  - Shows when API reports 0 XP or DR reduces next completion to 0
+  - Theme-aware error color (uses theme's error palette)
+  - Red background tint and red XP text for visual warning
+
+- House XP Formula Info: Config tab now explains the decay system
+  - Base values, Standard Decay (20%), Accelerated Decay (25%)
+  - Exceptions for Raid Bosses and One-Time tasks
+  - Note about 1000 XP cap per endeavor
+
+- Endeavor XP Formula Implementation:
+  - Full formula: Reward = Base × Roster_Scale × Task_Multiplier × DR_Multiplier
+  - Roster Scale detection from activity log (4 tiers: 1-2, 3-5, 6-10, 11+ chars)
+  - Task multipliers: Standard=1.0, Raid Boss=2.0, Profession Rare=1.2
+  - Standard DR: max(0.20, 1 - 0.20 × (N - 1))
+  - Raid Boss DR: Step-down (100% for N≤2, 50% for N=3-5, 0% for N≥6)
+
+UI IMPROVEMENTS:
+- XP text now uses theme's success color (green) for all themes
+- ThemeEngine respects warning state when applying colors
+
+TECHNICAL:
+- Added ROSTER_SCALE constants with tier detection thresholds
+- Added TASK_MULTIPLIERS and TASK_BASE_VALUES lookup tables
+- DetectRosterScale() analyzes activity log to determine current tier (5min cache)
+- GetTaskMultiplier() returns task-specific bonus multiplier
+- CalculateDRMultiplier() handles standard vs raid boss DR curves
+- GetTaskRankings() returns top 3 tasks sorted by predicted next XP
+- Added _isNoXPWarning flag for ThemeEngine to preserve warning colors
+
+--------------------------------------------------------------------------------
+
 Version 1.5.7 (Released January 2026)
 --------------------------------------------------------------------------------
 

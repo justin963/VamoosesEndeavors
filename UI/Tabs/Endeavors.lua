@@ -17,6 +17,9 @@ local sortState = {
     direction = nil,
 }
 
+-- Rewards highlighting toggle (persisted)
+local showRewardsHighlight = true
+
 -- Reusable sorted tasks array (avoids allocation on every sort)
 local sortedTasksCache = {}
 
@@ -24,6 +27,10 @@ local function LoadSortState()
     if VE_DB and VE_DB.ui and VE_DB.ui.taskSort then
         sortState.column = VE_DB.ui.taskSort.column
         sortState.direction = VE_DB.ui.taskSort.direction
+    end
+    -- Load rewards highlight toggle (default true)
+    if VE_DB and VE_DB.ui and VE_DB.ui.showRewardsHighlight ~= nil then
+        showRewardsHighlight = VE_DB.ui.showRewardsHighlight
     end
 end
 
@@ -34,6 +41,12 @@ local function SaveSortState()
         column = sortState.column,
         direction = sortState.direction,
     }
+end
+
+local function SaveRewardsHighlight()
+    VE_DB = VE_DB or {}
+    VE_DB.ui = VE_DB.ui or {}
+    VE_DB.ui.showRewardsHighlight = showRewardsHighlight
 end
 
 -- Compute progress hash that changes when any task's progress changes
@@ -47,6 +60,19 @@ local function ComputeProgressHash(tasks)
     return hash
 end
 
+-- Cache for nextXP values during sort (avoids recalculating per comparison)
+local nextXPCache = {}
+
+local function GetNextXPForTask(task)
+    if not task.id then return 0 end
+    if nextXPCache[task.id] then return nextXPCache[task.id] end
+    if not VE.EndeavorTracker then return 0 end
+    local completions = VE.EndeavorTracker:GetAccountCompletionCount(task.id)
+    local nextXP = VE.EndeavorTracker:CalculateNextContribution(task.name, completions)
+    nextXPCache[task.id] = nextXP
+    return nextXP
+end
+
 -- Sort comparator (created once, captures sortState)
 local function TaskSortComparator(a, b)
     -- Completed tasks always sort to bottom
@@ -58,6 +84,9 @@ local function TaskSortComparator(a, b)
     if sortState.column == "xp" then
         valA = a.points or 0
         valB = b.points or 0
+    elseif sortState.column == "nextXP" then
+        valA = GetNextXPForTask(a)
+        valB = GetNextXPForTask(b)
     else
         valA = a.couponReward or 0
         valB = b.couponReward or 0
@@ -74,7 +103,9 @@ local function GetSortedTasks(tasks)
     if not sortState.column or not sortState.direction then
         return tasks
     end
-    -- Clear and repopulate cache
+    -- Clear nextXP cache before sorting
+    for k in pairs(nextXPCache) do nextXPCache[k] = nil end
+    -- Clear and repopulate tasks cache
     for i = 1, #sortedTasksCache do
         sortedTasksCache[i] = nil
     end
@@ -141,6 +172,7 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             SaveSortState()
             container.sortXpBtn:UpdateIcon()
             container.sortCouponsBtn:UpdateIcon()
+            if container.sortNextXPBtn then container.sortNextXPBtn:UpdateIcon() end
             container:Update(true) -- Force update on sort change
         end)
 
@@ -164,6 +196,105 @@ function VE.UI.Tabs:CreateEndeavors(parent)
     container.sortCouponsBtn = CreateSortButton(tasksHeader, "coupons", -17)
     container.sortXpBtn:UpdateIcon()
     container.sortCouponsBtn:UpdateIcon()
+
+    -- Rewards highlight toggle button (next to title text)
+    local rewardsBtn = CreateFrame("Button", nil, tasksHeader)
+    rewardsBtn:SetSize(16, 16)
+    rewardsBtn:SetPoint("LEFT", tasksHeader.label, "RIGHT", 4, -2)
+
+    local rewardsIcon = rewardsBtn:CreateTexture(nil, "ARTWORK")
+    rewardsIcon:SetAllPoints()
+    rewardsIcon:SetAtlas("activities-chest-sw-glow")
+    rewardsBtn.icon = rewardsIcon
+
+    local function UpdateRewardsIcon()
+        if showRewardsHighlight then
+            rewardsIcon:SetAlpha(1.0)
+            rewardsIcon:SetDesaturated(false)
+        else
+            rewardsIcon:SetAlpha(0.4)
+            rewardsIcon:SetDesaturated(true)
+        end
+    end
+    UpdateRewardsIcon()
+
+    rewardsBtn:SetScript("OnClick", function()
+        showRewardsHighlight = not showRewardsHighlight
+        SaveRewardsHighlight()
+        UpdateRewardsIcon()
+        container:Update(true)
+    end)
+
+    rewardsBtn:SetScript("OnEnter", function(self)
+        self.icon:SetAlpha(1.0)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Best Next Endeavor", 1, 1, 1)
+        if showRewardsHighlight then
+            GameTooltip:AddLine("Click to hide task highlighting", 0.7, 0.7, 0.7)
+        else
+            GameTooltip:AddLine("Click to show gold/silver/bronze highlighting", 0.7, 0.7, 0.7)
+        end
+        GameTooltip:Show()
+    end)
+
+    rewardsBtn:SetScript("OnLeave", function(self)
+        UpdateRewardsIcon()
+        GameTooltip:Hide()
+    end)
+
+    container.rewardsBtn = rewardsBtn
+
+    -- Sort by Next XP button (next to rewards toggle)
+    local sortNextXPBtn = CreateFrame("Button", nil, tasksHeader)
+    sortNextXPBtn:SetSize(16, 16)
+    sortNextXPBtn:SetPoint("LEFT", rewardsBtn, "RIGHT", 2, 0)
+    sortNextXPBtn.column = "nextXP"
+
+    local sortNextXPIcon = sortNextXPBtn:CreateTexture(nil, "ARTWORK")
+    sortNextXPIcon:SetAllPoints()
+    sortNextXPIcon:SetAtlas("housing-stair-arrow-down-default")
+    sortNextXPBtn.icon = sortNextXPIcon
+
+    function sortNextXPBtn:UpdateIcon()
+        if sortState.column == "nextXP" then
+            local atlas = sortState.direction == "asc" and "housing-stair-arrow-up-highlight" or "housing-stair-arrow-down-highlight"
+            self.icon:SetAtlas(atlas)
+        else
+            self.icon:SetAtlas("housing-stair-arrow-down-default")
+        end
+    end
+    sortNextXPBtn:UpdateIcon()
+
+    sortNextXPBtn:SetScript("OnClick", function(self)
+        if sortState.column == "nextXP" then
+            -- Toggle off (no ascending - best at bottom is irrelevant)
+            sortState.column = nil
+            sortState.direction = nil
+        else
+            sortState.column = "nextXP"
+            sortState.direction = "desc"
+        end
+        SaveSortState()
+        container.sortXpBtn:UpdateIcon()
+        container.sortCouponsBtn:UpdateIcon()
+        sortNextXPBtn:UpdateIcon()
+        container:Update(true)
+    end)
+
+    sortNextXPBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Sort by Next XP", 1, 1, 1)
+        GameTooltip:AddLine("Best tasks first (gold/silver/bronze)", 0.7, 0.7, 0.7)
+        if sortState.column == "nextXP" then
+            local dir = sortState.direction == "asc" and "ascending" or "descending"
+            GameTooltip:AddLine("Currently: " .. dir, 0.7, 0.7, 0.7)
+        end
+        GameTooltip:Show()
+    end)
+
+    sortNextXPBtn:SetScript("OnLeave", GameTooltip_Hide)
+
+    container.sortNextXPBtn = sortNextXPBtn
 
     -- ========================================================================
     -- TASKS LIST (Scrollable)
@@ -227,6 +358,12 @@ function VE.UI.Tabs:CreateEndeavors(parent)
         -- Get sorted tasks
         local displayTasks = GetSortedTasks(tasks)
 
+        -- Get task rankings for "next best XP" highlighting (if enabled)
+        local rankings = {}
+        if showRewardsHighlight and VE.EndeavorTracker then
+            rankings = VE.EndeavorTracker:GetTaskRankings() or {}
+        end
+
         -- Render rows
         local yOffset = 2
         for i, task in ipairs(displayTasks) do
@@ -237,7 +374,8 @@ function VE.UI.Tabs:CreateEndeavors(parent)
             end
             row:SetPoint("TOPLEFT", 0, -yOffset)
             row:SetPoint("TOPRIGHT", -2, -yOffset)
-            row:SetTask(task)
+            local ranking = task.id and rankings[task.id] or nil
+            row:SetTask(task, ranking)
             row:Show()
             yOffset = yOffset + rowHeight + rowSpacing
         end

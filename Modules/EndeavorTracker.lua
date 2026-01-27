@@ -80,6 +80,12 @@ function Tracker:OnEvent(event, ...)
     local debug = VE.Store:GetState().config.debug
 
     if event == "PLAYER_ENTERING_WORLD" then
+        -- Register current character for account-wide tracking (used by GetAccountCompletionCount)
+        VE_DB = VE_DB or {}
+        VE_DB.myCharacters = VE_DB.myCharacters or {}
+        local charName = UnitName("player")
+        if charName then VE_DB.myCharacters[charName] = true end
+
         -- Initialize housing system first (like Blizzard's dashboard does)
         -- This triggers PLAYER_HOUSE_LIST_UPDATED which handles the actual data fetch
         -- DON'T call FetchEndeavorData here - wait for PLAYER_HOUSE_LIST_UPDATED to set neighborhood context first
@@ -691,8 +697,7 @@ function Tracker:DumpTaskXPData()
 end
 
 -- Calculate total house XP earned from task completions
--- Repeatable tasks: sum of base + progressive DR-reduced subsequent completions
--- Non-repeatable tasks: base value once only (regardless of timesCompleted)
+-- Uses the new decay table: Standard (-20%), Accelerated (-25%), One-time, Flat
 function Tracker:GetTaskTotalHouseXPEarned(task)
     local completions = task.timesCompleted or 0
     if task.completed then
@@ -703,29 +708,17 @@ function Tracker:GetTaskTotalHouseXPEarned(task)
         return 0
     end
 
-    -- Get base value from known table or use current reward value
-    local base = GetTaskBaseValue(task.name)
-    if not base then
-        base = task.progressContributionAmount or task.points or 0
-    end
+    -- Get task info (base value and decay type) from new decay table
+    local taskInfo = self:GetTaskInfo(task.name)
+    local base = taskInfo.base
+    local decayType = taskInfo.decay
 
-    -- Non-repeatable tasks: count base value once only
-    if not task.isRepeatable then
-        return base
-    end
-
-    -- Repeatable tasks: sum with progressive DR
-    -- Formula: factor_n = 0.96 - 0.10 * n (applied to previous reward)
-    -- Progression: 50 → 38 (×0.76) → 25 (×0.66) → 14 (×0.56) → 10 (floor)
-    local total = base  -- First completion gets full base
-    local reward = base
-
-    for n = 2, completions do
-        local factor = 0.96 - 0.10 * n  -- n=2: 0.76, n=3: 0.66, n=4: 0.56...
-        factor = math.max(factor, 0.10) -- Don't go below 10% factor
-        reward = math.floor(reward * factor)
-        reward = math.max(reward, HOUSE_XP_MIN_FLOOR)
-        total = total + reward
+    -- Sum XP for each completion using decay multipliers
+    local total = 0
+    for run = 1, completions do
+        -- CalculateDecayMultiplier expects completions before this run
+        local decayMult = self:CalculateDecayMultiplier(run - 1, decayType)
+        total = total + (base * decayMult)
     end
 
     return math.floor(total + 0.5)
@@ -1013,6 +1006,315 @@ function Tracker:GetTaskXPForCurrentPlayer(taskID)
         return taskData[playerName].amount
     end
     return nil
+end
+
+-- Count completions for current player from activity log
+function Tracker:GetPlayerCompletionCount(taskID)
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then return 0 end
+    local playerName = UnitName("player")
+    local count = 0
+    for _, entry in ipairs(logInfo.taskActivity) do
+        if entry.taskID == taskID and entry.playerName == playerName then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- Count completions across ALL of the user's characters (account-wide)
+-- DR is account-based, so we sum completions from all alts in VE_DB.myCharacters
+function Tracker:GetAccountCompletionCount(taskID)
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then return 0 end
+
+    -- Get list of user's characters (populated on login from Leaderboard/Activity tabs)
+    VE_DB = VE_DB or {}
+    local myChars = VE_DB.myCharacters or {}
+
+    local count = 0
+    for _, entry in ipairs(logInfo.taskActivity) do
+        if entry.taskID == taskID and myChars[entry.playerName] then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- ============================================================================
+-- NEXT BEST TASK XP FORMULA
+-- Formula: Reward = Base_Value × Roster_Scale × Task_Multiplier × DR_Multiplier
+-- ============================================================================
+
+-- Detect current roster scale from activity log data
+-- Analyzes recent XP values to determine which tier we're in
+function Tracker:DetectRosterScale()
+    -- Cache the result for this session (roster scale doesn't change frequently)
+    if self.cachedRosterScale and self.cachedRosterScaleTime and (GetTime() - self.cachedRosterScaleTime) < 300 then
+        return self.cachedRosterScale
+    end
+
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity or #logInfo.taskActivity == 0 then
+        return VE.Constants.ROSTER_SCALE.TIER_11_PLUS  -- Default to largest tier
+    end
+
+    -- Look for standard Base-50 tasks at 100% DR (N=1) to detect scale
+    -- These give: 50 × scale × 1.0 × 1.0 = 50 × scale
+    -- Expected values: 2.012, 1.956, 1.856, 1.485
+    local scaleMap = {
+        [0.04024] = { min = 1.95, max = 2.1 },   -- 50 * 0.04024 = 2.012
+        [0.03912] = { min = 1.90, max = 2.0 },   -- 50 * 0.03912 = 1.956
+        [0.03712] = { min = 1.80, max = 1.90 },  -- 50 * 0.03712 = 1.856
+        [0.02970] = { min = 1.40, max = 1.55 },  -- 50 * 0.02970 = 1.485
+    }
+
+    -- Find the maximum XP value from recent activity (should be a full 100% completion)
+    local maxXP = 0
+    for _, entry in ipairs(logInfo.taskActivity) do
+        if entry.amount and entry.amount > maxXP then
+            maxXP = entry.amount
+        end
+    end
+
+    -- Determine scale from max observed XP
+    local detectedScale = VE.Constants.ROSTER_SCALE.TIER_11_PLUS
+    for scale, range in pairs(scaleMap) do
+        if maxXP >= range.min and maxXP <= range.max then
+            detectedScale = scale
+            break
+        end
+    end
+
+    -- Cache result
+    self.cachedRosterScale = detectedScale
+    self.cachedRosterScaleTime = GetTime()
+
+    return detectedScale
+end
+
+-- Get task multiplier based on task name (2.0x for Raid Boss, 1.2x for Profession Rare, 1.0x standard)
+function Tracker:GetTaskMultiplier(taskName)
+    if not taskName then return VE.Constants.TASK_MULTIPLIERS.STANDARD end
+    local lower = taskName:lower()
+
+    if lower:find("raid boss") or lower:find("kill raid") then
+        return VE.Constants.TASK_MULTIPLIERS.RAID_BOSS
+    elseif lower:find("profession rare") then
+        return VE.Constants.TASK_MULTIPLIERS.PROFESSION_RARE
+    end
+
+    return VE.Constants.TASK_MULTIPLIERS.STANDARD
+end
+
+-- Get base XP value for a task (before scaling) - for contribution formula
+function Tracker:GetTaskBaseValue(taskName)
+    if not taskName then return 50 end
+    local lower = taskName:lower()
+    local baseValues = VE.Constants.TASK_BASE_VALUES
+
+    for pattern, base in pairs(baseValues) do
+        if lower:find(pattern:lower()) then
+            return base
+        end
+    end
+
+    return 50  -- Default for unknown tasks
+end
+
+-- Check if task is a raid boss task (by name pattern)
+function Tracker:IsRaidBossTask(taskName)
+    if not taskName then return false end
+    local lower = taskName:lower()
+    return lower:find("raid boss") or lower:find("kill raid")
+end
+
+-- Check if task is one-time (100% first run, 0% after)
+function Tracker:IsOneTimeTask(taskName)
+    if not taskName then return false end
+    local lower = taskName:lower()
+    return lower:find("profession rare") or lower:find("daily quest")
+end
+
+-- Calculate DR multiplier for contribution formula
+-- One-Time: 100% first run, 0% after (Profession Rare, Daily Quests)
+-- Raid Boss: 100% for runs 1-2, 50% for runs 3-5, 0% for runs 6+
+-- Standard: max(0.20, 1 - 0.20 × (N - 1))
+function Tracker:CalculateDRMultiplier(completions, isRaidBoss, isOneTime)
+    local runCount = completions + 1
+    if isOneTime then
+        -- One-time tasks: full reward first run only
+        return runCount > 1 and 0.0 or 1.0
+    elseif isRaidBoss then
+        if runCount <= 2 then return 1.0
+        elseif runCount <= 5 then return 0.5
+        else return 0 end
+    else
+        -- Standard linear decay with 20% floor
+        return math.max(0.20, 1 - 0.20 * (runCount - 1))
+    end
+end
+
+-- ============================================================================
+-- NEW HOUSE XP FORMULA (based on decay table)
+-- Categories: ONE-TIME, ACCELERATED (-25%), STANDARD (-20%), FLAT (no decay)
+-- ============================================================================
+
+-- Task definitions with base values and decay rules
+local TASK_DATA = {
+    -- ONE-TIME TASKS (100% first run, then 0% forever)
+    { patterns = {"profession rare"}, base = 150, decay = "onetime" },
+    { patterns = {"daily quest"}, base = 50, decay = "onetime" },
+    { patterns = {"champion", "faction envoy"}, base = 10, decay = "onetime" },
+
+    -- MAJOR OBJECTIVES - Accelerated decay (-25% per completion, floor 25%)
+    { patterns = {"weekly", "neighborhood"}, base = 50, decay = "accelerated" },
+    { patterns = {"war creche", "subdue"}, base = 50, decay = "accelerated" },
+    { patterns = {"primal storm"}, base = 50, decay = "accelerated" },
+
+    -- MAJOR GRIND - Standard decay (-20% per completion, floor 20%)
+    { patterns = {"lumber", "harvest lumber"}, base = 50, decay = "standard" },
+    { patterns = {"good neighbor", "be a good"}, base = 50, decay = "standard" },
+
+    -- STANDARD GRIND - Standard decay (-20% per completion, floor 20%)
+    { patterns = {"forbidden hoard", "loot a forbidden"}, base = 25, decay = "standard" },
+    { patterns = {"gather", "herbs", "ores", "skins"}, base = 25, decay = "standard" },
+    { patterns = {"kill rare", "rares"}, base = 25, decay = "standard" },
+    { patterns = {"kill creature", "creatures"}, base = 25, decay = "standard" },
+    { patterns = {"zskera", "vault door"}, base = 25, decay = "standard" },
+    { patterns = {"sealed scroll"}, base = 25, decay = "standard" },
+    { patterns = {"pet battle"}, base = 25, decay = "standard" },
+
+    -- MINOR GRIND - Standard decay (-20% per completion, floor 20%)
+    { patterns = {"skyriding", "race"}, base = 10, decay = "standard" },
+    { patterns = {"delve"}, base = 10, decay = "standard" },
+    { patterns = {"mythic"}, base = 10, decay = "standard" },
+    { patterns = {"world quest"}, base = 10, decay = "standard" },
+    { patterns = {"honor"}, base = 10, decay = "standard" },
+
+    -- SPECIAL - Flat (no decay)
+    { patterns = {"raid boss", "kill raid"}, base = 5, decay = "flat" },
+}
+
+-- Get task info (base value and decay type) from task name
+function Tracker:GetTaskInfo(taskName)
+    if not taskName then return { base = 50, decay = "standard" } end
+    local lower = taskName:lower()
+
+    for _, taskDef in ipairs(TASK_DATA) do
+        for _, pattern in ipairs(taskDef.patterns) do
+            if lower:find(pattern) then
+                return { base = taskDef.base, decay = taskDef.decay }
+            end
+        end
+    end
+
+    return { base = 50, decay = "standard" }  -- Default
+end
+
+-- Calculate decay multiplier based on completion count and decay type
+-- Run 1 = completions 0, Run 2 = completions 1, etc.
+function Tracker:CalculateDecayMultiplier(completions, decayType)
+    local run = completions + 1  -- Next run number
+
+    if decayType == "onetime" then
+        -- 100% first run, 0% forever after
+        return run == 1 and 1.0 or 0
+
+    elseif decayType == "accelerated" then
+        -- -25% per completion, floor at 25%
+        -- Run 1: 100%, Run 2: 75%, Run 3: 50%, Run 4: 25%, Run 5+: 25%
+        return math.max(0.25, 1 - 0.25 * (run - 1))
+
+    elseif decayType == "flat" then
+        -- Flat for first 5 runs, then 0% at run 6+
+        return run <= 5 and 1.0 or 0
+
+    else -- "standard"
+        -- -20% per completion, floor at 20%
+        -- Run 1: 100%, Run 2: 80%, Run 3: 60%, Run 4: 40%, Run 5: 20%, Run 6+: 20%
+        return math.max(0.20, 1 - 0.20 * (run - 1))
+    end
+end
+
+-- Calculate next House XP reward (raw value, not scaled by roster)
+-- Formula: Base × Decay_Multiplier
+function Tracker:CalculateNextXP(taskName, completions, _rosterScale)
+    -- Note: _rosterScale param kept for API compatibility but not used in new formula
+    local taskInfo = self:GetTaskInfo(taskName)
+    local decayMult = self:CalculateDecayMultiplier(completions, taskInfo.decay)
+
+    return taskInfo.base * decayMult
+end
+
+-- ============================================================================
+-- CONTRIBUTION-BASED FORMULA (for Best Next Endeavor ranking)
+-- Formula: Base × Roster_Scale × DR_Multiplier (gives actual XP contribution)
+-- ============================================================================
+
+-- Calculate next contribution using roster scale (for rankings/tooltips)
+-- Formula: Base_Value × Roster_Scale × Task_Multiplier × DR_Multiplier
+function Tracker:CalculateNextContribution(taskName, completions)
+    local rosterScale = self:DetectRosterScale()
+    local baseValue = self:GetTaskBaseValue(taskName)  -- From VE.Constants.TASK_BASE_VALUES
+    local taskMultiplier = self:GetTaskMultiplier(taskName)
+    local isRaidBoss = self:IsRaidBossTask(taskName)
+    local isOneTime = self:IsOneTimeTask(taskName)
+    local drMultiplier = self:CalculateDRMultiplier(completions, isRaidBoss, isOneTime)
+
+    return baseValue * rosterScale * taskMultiplier * drMultiplier
+end
+
+-- Get task rankings by next contribution value for current player
+-- Returns: { [taskID] = { rank=1-3, nextXP=amount } } for top 3 only
+function Tracker:GetTaskRankings()
+    local tasks = VE.Store:GetState().tasks or {}
+    local rankings = {}
+
+    -- Build list of { taskID, nextXP, taskName } for incomplete repeatable tasks
+    local taskList = {}
+    for _, task in ipairs(tasks) do
+        if task.isRepeatable and task.id and not task.completed then
+            -- Use ACCOUNT-WIDE completions since DR is account-based
+            local completions = self:GetAccountCompletionCount(task.id)
+            -- Use contribution formula (with roster scale) for ranking
+            local nextXP = self:CalculateNextContribution(task.name, completions)
+            if nextXP > 0 then
+                table.insert(taskList, {
+                    id = task.id,
+                    nextXP = nextXP,
+                    name = task.name,
+                    completions = completions,
+                })
+            end
+        end
+    end
+
+    -- Sort by nextXP descending
+    table.sort(taskList, function(a, b) return a.nextXP > b.nextXP end)
+
+    -- Assign ranks with tie handling (tasks with same XP share rank)
+    local currentRank = 0
+    local lastXP = nil
+    for _, task in ipairs(taskList) do
+        -- New rank only if XP is different (using small epsilon for float comparison)
+        if not lastXP or math.abs(task.nextXP - lastXP) > 0.0001 then
+            currentRank = currentRank + 1
+            lastXP = task.nextXP
+        end
+        -- Only include ranks 1-3 (gold/silver/bronze)
+        if currentRank <= 3 then
+            rankings[task.id] = {
+                rank = currentRank,
+                nextXP = task.nextXP,
+                completions = task.completions,
+            }
+        else
+            break  -- Stop once we've passed bronze
+        end
+    end
+
+    return rankings
 end
 
 function Tracker:RequestActivityLog()

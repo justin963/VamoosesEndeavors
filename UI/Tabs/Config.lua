@@ -481,7 +481,7 @@ function VE.UI.Tabs:CreateConfig(parent)
     -- HOUSE XP FORMULA INFO
     -- ========================================================================
 
-    local formulaHeader = VE.UI:CreateSectionHeader(settingsPanel, "House XP Formula (Guess!)")
+    local formulaHeader = VE.UI:CreateSectionHeader(settingsPanel, "House XP Formula")
     formulaHeader:SetPoint("TOPLEFT", 0, yOffset)
     formulaHeader:SetPoint("TOPRIGHT", 0, yOffset)
     container.formulaHeader = formulaHeader
@@ -490,113 +490,81 @@ function VE.UI.Tabs:CreateConfig(parent)
 
     local formulaC = GetColors()
 
-    -- Formula explanation
-    local formulaText = settingsPanel:CreateFontString(nil, "OVERLAY")
-    formulaText:SetPoint("TOPLEFT", 12, yOffset)
-    formulaText:SetJustifyH("LEFT")
-    VE.Theme.ApplyFont(formulaText, formulaC, "small")
-    formulaText:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    formulaText:SetText("Progressive DR: factor = 0.96 - 0.10 * n")
-    container.formulaText = formulaText
+    -- Intro text (~6 lines wrapped)
+    local formulaIntro = settingsPanel:CreateFontString(nil, "OVERLAY")
+    formulaIntro:SetPoint("TOPLEFT", 12, yOffset)
+    formulaIntro:SetWidth(290)
+    formulaIntro:SetJustifyH("LEFT")
+    formulaIntro:SetWordWrap(true)
+    formulaIntro:SetSpacing(2)
+    VE.Theme.ApplyFont(formulaIntro, formulaC, "small")
+    formulaIntro:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    formulaIntro:SetText("House XP is the raw value generated for your neighborhood, separate from your personal Contribution Reward. It decays based on the total number of times your account has completed the task this week (comps).\n\n|cFFcb4b16House XP is capped at 1000 per endeavor.|r")
+    container.formulaIntro = formulaIntro
 
-    yOffset = yOffset - 14
+    yOffset = yOffset - 115
 
-    local formulaExample = settingsPanel:CreateFontString(nil, "OVERLAY")
-    formulaExample:SetPoint("TOPLEFT", 12, yOffset)
-    formulaExample:SetJustifyH("LEFT")
-    VE.Theme.ApplyFont(formulaExample, formulaC, "small")
-    formulaExample:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    formulaExample:SetText("n=2: x0.76, n=3: x0.66, n=4: x0.56...")
-    container.formulaExample = formulaExample
+    -- Base Value (~2 lines wrapped)
+    local baseValue = settingsPanel:CreateFontString(nil, "OVERLAY")
+    baseValue:SetPoint("TOPLEFT", 12, yOffset)
+    baseValue:SetWidth(290)
+    baseValue:SetJustifyH("LEFT")
+    baseValue:SetWordWrap(true)
+    VE.Theme.ApplyFont(baseValue, formulaC, "small")
+    baseValue:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    baseValue:SetText("|cFFb58900Base Value:|r The starting XP for a fresh run (e.g., 50 for Lumber, 25 for Hoards).")
+    container.baseValue = baseValue
 
-    yOffset = yOffset - 18
+    yOffset = yOffset - 40
 
-    -- Base values header
-    local baseHeader = settingsPanel:CreateFontString(nil, "OVERLAY")
-    baseHeader:SetPoint("TOPLEFT", 12, yOffset)
-    VE.Theme.ApplyFont(baseHeader, formulaC, "small")
-    baseHeader:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
-    baseHeader:SetText("Known Base Values:")
-    container.baseHeader = baseHeader
+    -- Standard Decay (~3 lines wrapped)
+    local stdDecay = settingsPanel:CreateFontString(nil, "OVERLAY")
+    stdDecay:SetPoint("TOPLEFT", 12, yOffset)
+    stdDecay:SetWidth(290)
+    stdDecay:SetJustifyH("LEFT")
+    stdDecay:SetWordWrap(true)
+    VE.Theme.ApplyFont(stdDecay, formulaC, "small")
+    stdDecay:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    stdDecay:SetText("|cFF859900Standard Decay:|r Most repeatable tasks lose 20% of their Base Value per completion.\nSequence: 100% -> 80% -> 60% -> 40% -> 20% (Floor).")
+    container.stdDecay = stdDecay
 
-    yOffset = yOffset - 14
+    yOffset = yOffset - 55
 
-    -- Base 50 tasks
-    local base50 = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base50:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base50, formulaC, "small")
-    base50:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base50:SetText("|cFFb58900Base 50:|r Weekly, Good Neighbor,")
-    container.base50 = base50
+    -- Accelerated Decay (~4 lines wrapped)
+    local accDecay = settingsPanel:CreateFontString(nil, "OVERLAY")
+    accDecay:SetPoint("TOPLEFT", 12, yOffset)
+    accDecay:SetWidth(290)
+    accDecay:SetJustifyH("LEFT")
+    accDecay:SetWordWrap(true)
+    VE.Theme.ApplyFont(accDecay, formulaC, "small")
+    accDecay:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    accDecay:SetText("|cFFdc322fAccelerated Decay:|r Major Objectives (Weekly Quests, War Creche, Primal Storms) decay faster, losing 25% per completion.\nSequence: 100% -> 75% -> 50% -> 25% (Floor).")
+    container.accDecay = accDecay
 
-    yOffset = yOffset - 12
+    yOffset = yOffset - 70
 
-    local base50b = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base50b:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base50b, formulaC, "small")
-    base50b:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base50b:SetText("Daily, Froststone, War Creche, Lumber")
-    container.base50b = base50b
+    -- Exceptions (~2 lines wrapped)
+    local exceptions = settingsPanel:CreateFontString(nil, "OVERLAY")
+    exceptions:SetPoint("TOPLEFT", 12, yOffset)
+    exceptions:SetWidth(290)
+    exceptions:SetJustifyH("LEFT")
+    exceptions:SetWordWrap(true)
+    VE.Theme.ApplyFont(exceptions, formulaC, "small")
+    exceptions:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
+    exceptions:SetText("|cFF6c71c4Exceptions:|r Raid Bosses (Base 5) do not decay for the first 3 kills. One-Time tasks (Base 150) drop instantly to 0.")
+    container.exceptions = exceptions
 
-    yOffset = yOffset - 14
+    yOffset = yOffset - 45
 
-    -- Base 25 tasks
-    local base25 = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base25:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base25, formulaC, "small")
-    base25:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base25:SetText("|cFF859900Base 25:|r Pet Battle, Hoard, Scrolls,")
-    container.base25 = base25
+    -- Formula
+    local formula = settingsPanel:CreateFontString(nil, "OVERLAY")
+    formula:SetPoint("TOPLEFT", 12, yOffset)
+    VE.Theme.ApplyFont(formula, formulaC, "small")
+    formula:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
+    formula:SetText("Current Value = Base - (Decay Rate x Completions)")
+    container.formula = formula
 
-    yOffset = yOffset - 12
-
-    local base25b = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base25b:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base25b, formulaC, "small")
-    base25b:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base25b:SetText("Vault Doors, Kill Rares, Gather, Creatures")
-    container.base25b = base25b
-
-    yOffset = yOffset - 14
-
-    -- Base 150 tasks
-    local base150 = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base150:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base150, formulaC, "small")
-    base150:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base150:SetText("|cFFdc322fBase 150:|r Profession Rare")
-    container.base150 = base150
-
-    yOffset = yOffset - 14
-
-    -- Base 10 tasks
-    local base10 = settingsPanel:CreateFontString(nil, "OVERLAY")
-    base10:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(base10, formulaC, "small")
-    base10:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    base10:SetText("|cFF6c71c4Base 10:|r Skyriding, Delves, M+, Raids")
-    container.base10 = base10
-
-    yOffset = yOffset - 18
-
-    -- Example progression
-    local progHeader = settingsPanel:CreateFontString(nil, "OVERLAY")
-    progHeader:SetPoint("TOPLEFT", 12, yOffset)
-    VE.Theme.ApplyFont(progHeader, formulaC, "small")
-    progHeader:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
-    progHeader:SetText("Example (Base 50):")
-    container.progHeader = progHeader
-
-    yOffset = yOffset - 14
-
-    local progExample = settingsPanel:CreateFontString(nil, "OVERLAY")
-    progExample:SetPoint("TOPLEFT", 20, yOffset)
-    VE.Theme.ApplyFont(progExample, formulaC, "small")
-    progExample:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    progExample:SetText("50 -> 38 -> 25 -> 14 -> 10 (floor)")
-    container.progExample = progExample
-
-    yOffset = yOffset - 24
+    yOffset = yOffset - 30
 
     -- ========================================================================
     -- VERSION INFO (inside scroll content)
