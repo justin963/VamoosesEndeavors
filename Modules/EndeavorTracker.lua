@@ -9,6 +9,11 @@ VE.EndeavorTracker = {}
 
 local Tracker = VE.EndeavorTracker
 
+-- ============================================================================
+-- ONLY HARDCODED CONFIG VALUE
+-- ============================================================================
+local COMPLETIONS_TO_FLOOR = 5  -- Standard tasks reach floor at run 5
+
 -- Frame for event handling
 Tracker.frame = CreateFrame("Frame")
 
@@ -49,6 +54,9 @@ function Tracker:Initialize()
     self.selectedHouseIndex = (VE_DB and VE_DB.selectedHouseIndex) or 1 -- Load saved selection
     self.houseListLoaded = false -- Flag to track if we've received house list
 
+    -- Per-task learned decay rules (simplified decay system)
+    self.taskRules = {}
+
     self.frame:SetScript("OnEvent", function(frame, event, ...)
         self:OnEvent(event, ...)
     end)
@@ -66,6 +74,9 @@ function Tracker:Initialize()
             end)
         end
     end)
+
+    -- Load previously learned formula values from SavedVariables
+    self:LoadLearnedValues()
 
     if VE.Store:GetState().config.debug then
         print("|cFF2aa198[VE Tracker]|r Initialized with C_NeighborhoodInitiative API")
@@ -125,6 +136,7 @@ function Tracker:OnEvent(event, ...)
         self.activityLogLoaded = true
         self.activityLogLastUpdated = time()
         self:BuildTaskXPCache()  -- Rebuild XP cache from activity log
+        self:BuildTaskRulesFromLog()  -- Learn per-task decay rules
         VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
         self:QueueDataRefresh()
 
@@ -160,10 +172,19 @@ function Tracker:OnEvent(event, ...)
         -- If user manually changed selection in last 2 seconds, respect their choice
         local recentManualSelection = self.lastManualSelectionTime and (GetTime() - self.lastManualSelectionTime) < 2
 
-        -- Check if current selection is still valid (index within bounds and house exists)
+        -- On login, always prefer active neighborhood over saved selection
+        -- (user may have changed active house since last session)
+        local activeNeighborhood = C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
+        local savedSelectionMatchesActive = false
         if selectedIndex and houseInfoList and selectedIndex >= 1 and selectedIndex <= #houseInfoList then
+            savedSelectionMatchesActive = houseInfoList[selectedIndex].neighborhoodGUID == activeNeighborhood
+        end
+
+        -- Check if current selection is still valid AND matches active (or no active endeavor)
+        if selectedIndex and houseInfoList and selectedIndex >= 1 and selectedIndex <= #houseInfoList
+           and (savedSelectionMatchesActive or not activeNeighborhood or recentManualSelection) then
             neighborhoodGUID = houseInfoList[selectedIndex].neighborhoodGUID
-            -- Selection still valid, keep it
+            -- Selection still valid and matches active (or user manually selected), keep it
         elseif recentManualSelection then
             -- User just changed selection, don't auto-select even if index seems invalid
             -- (might be a race condition with house list update)
@@ -188,15 +209,12 @@ function Tracker:OnEvent(event, ...)
             end
 
             -- Priority 2: Active neighborhood (if we have a house there)
-            if not neighborhoodGUID then
-                local activeNeighborhood = C_NeighborhoodInitiative and C_NeighborhoodInitiative.GetActiveNeighborhood and C_NeighborhoodInitiative.GetActiveNeighborhood()
-                if activeNeighborhood and houseInfoList then
-                    for i, houseInfo in ipairs(houseInfoList) do
-                        if houseInfo.neighborhoodGUID == activeNeighborhood then
-                            neighborhoodGUID = activeNeighborhood
-                            selectedIndex = i
-                            break
-                        end
+            if not neighborhoodGUID and activeNeighborhood and houseInfoList then
+                for i, houseInfo in ipairs(houseInfoList) do
+                    if houseInfo.neighborhoodGUID == activeNeighborhood then
+                        neighborhoodGUID = activeNeighborhood
+                        selectedIndex = i
+                        break
                     end
                 end
             end
@@ -550,6 +568,7 @@ function Tracker:ProcessInitiativeInfo(info)
                     name = task.taskName,
                     description = task.description or "",
                     points = task.progressContributionAmount or 0,
+                    progressContributionAmount = task.progressContributionAmount or 0,  -- API value (decayed)
                     completed = task.completed or false,
                     current = self:GetTaskProgress(task),
                     max = self:GetTaskMax(task),
@@ -641,32 +660,6 @@ end
 -- Floor of 10 XP minimum per completion
 local HOUSE_XP_MIN_FLOOR = 10
 
--- Known base values by task name pattern (from fresh house data)
-local TASK_BASE_VALUES = {
-    -- Base 50 tasks
-    ["Weekly"] = 50, ["Good Neighbor"] = 50, ["Daily Quests"] = 50,
-    ["Froststone"] = 50, ["War Creche"] = 50, ["Lumber"] = 50,
-    -- Base 25 tasks
-    ["Pet Battle"] = 25, ["Forbidden Hoard"] = 25, ["Sealed Scrolls"] = 25,
-    ["Vault Doors"] = 25, ["Kill Rares"] = 25, ["Gather"] = 25, ["Creatures"] = 25,
-    -- Special tasks
-    ["Profession Rare"] = 150,
-    -- Base 10 tasks
-    ["Skyriding"] = 10, ["Delves"] = 10, ["Mythic"] = 10, ["Raids"] = 10,
-    ["Honor"] = 10, ["World Quests"] = 10,
-}
-
--- Try to find base value from task name using known patterns
-local function GetTaskBaseValue(taskName)
-    if not taskName then return nil end
-    local name = taskName:lower()
-    for pattern, base in pairs(TASK_BASE_VALUES) do
-        if name:find(pattern:lower()) then
-            return base
-        end
-    end
-    return nil
-end
 
 -- Debug dump of task XP data for analysis
 function Tracker:DumpTaskXPData()
@@ -681,7 +674,8 @@ function Tracker:DumpTaskXPData()
         local completions = task.timesCompleted or 0
         if task.completed then completions = completions + 1 end
         local earned = self:GetTaskTotalHouseXPEarned(task)
-        local base = GetTaskBaseValue(task.name) or (task.progressContributionAmount or task.points or 0)
+        local taskInfo = self:GetTaskInfo(task.name)
+        local base = taskInfo.base
         local repLabel = task.isRepeatable and "REP" or "ONE"
         print(string.format("  [%s] %s: base=%d, current=%d, comps=%d, earned=%d",
             repLabel,
@@ -697,7 +691,6 @@ function Tracker:DumpTaskXPData()
 end
 
 -- Calculate total house XP earned from task completions
--- Uses the new decay table: Standard (-20%), Accelerated (-25%), One-time, Flat
 function Tracker:GetTaskTotalHouseXPEarned(task)
     local completions = task.timesCompleted or 0
     if task.completed then
@@ -708,16 +701,13 @@ function Tracker:GetTaskTotalHouseXPEarned(task)
         return 0
     end
 
-    -- Get task info (base value and decay type) from new decay table
     local taskInfo = self:GetTaskInfo(task.name)
     local base = taskInfo.base
-    local decayType = taskInfo.decay
 
     -- Sum XP for each completion using decay multipliers
     local total = 0
     for run = 1, completions do
-        -- CalculateDecayMultiplier expects completions before this run
-        local decayMult = self:CalculateDecayMultiplier(run - 1, decayType)
+        local decayMult = self:GetDecayMultiplier(run)
         total = total + (base * decayMult)
     end
 
@@ -1042,227 +1032,527 @@ function Tracker:GetAccountCompletionCount(taskID)
 end
 
 -- ============================================================================
--- NEXT BEST TASK XP FORMULA
--- Formula: Reward = Base_Value × Roster_Scale × Task_Multiplier × DR_Multiplier
+-- SELF-LEARNING XP FORMULA SYSTEM
+-- Learns scale from observed floor task data (most accurate method)
+-- Rebuilds fresh from activity log each session (no persistence needed)
 -- ============================================================================
 
--- Detect current roster scale from activity log data
--- Analyzes recent XP values to determine which tier we're in
-function Tracker:DetectRosterScale()
-    -- Cache the result for this session (roster scale doesn't change frequently)
-    if self.cachedRosterScale and self.cachedRosterScaleTime and (GetTime() - self.cachedRosterScaleTime) < 300 then
-        return self.cachedRosterScale
-    end
-
+-- Count roster size from activity log
+function Tracker:GetRosterSize()
     local logInfo = self:GetActivityLogData()
-    if not logInfo or not logInfo.taskActivity or #logInfo.taskActivity == 0 then
-        return VE.Constants.ROSTER_SCALE.TIER_11_PLUS  -- Default to largest tier
-    end
-
-    -- Look for standard Base-50 tasks at 100% DR (N=1) to detect scale
-    -- These give: 50 × scale × 1.0 × 1.0 = 50 × scale
-    -- Expected values: 2.012, 1.956, 1.856, 1.485
-    local scaleMap = {
-        [0.04024] = { min = 1.95, max = 2.1 },   -- 50 * 0.04024 = 2.012
-        [0.03912] = { min = 1.90, max = 2.0 },   -- 50 * 0.03912 = 1.956
-        [0.03712] = { min = 1.80, max = 1.90 },  -- 50 * 0.03712 = 1.856
-        [0.02970] = { min = 1.40, max = 1.55 },  -- 50 * 0.02970 = 1.485
-    }
-
-    -- Find the maximum XP value from recent activity (should be a full 100% completion)
-    local maxXP = 0
-    for _, entry in ipairs(logInfo.taskActivity) do
-        if entry.amount and entry.amount > maxXP then
-            maxXP = entry.amount
+    local rosterSize = 0
+    if logInfo and logInfo.taskActivity then
+        local chars = {}
+        for _, entry in ipairs(logInfo.taskActivity) do
+            if entry.playerName then
+                chars[entry.playerName] = true
+            end
         end
+        for _ in pairs(chars) do rosterSize = rosterSize + 1 end
     end
-
-    -- Determine scale from max observed XP
-    local detectedScale = VE.Constants.ROSTER_SCALE.TIER_11_PLUS
-    for scale, range in pairs(scaleMap) do
-        if maxXP >= range.min and maxXP <= range.max then
-            detectedScale = scale
-            break
-        end
-    end
-
-    -- Cache result
-    self.cachedRosterScale = detectedScale
-    self.cachedRosterScaleTime = GetTime()
-
-    return detectedScale
+    return rosterSize
 end
 
--- Get task multiplier based on task name (2.0x for Raid Boss, 1.2x for Profession Rare, 1.0x standard)
-function Tracker:GetTaskMultiplier(taskName)
-    if not taskName then return VE.Constants.TASK_MULTIPLIERS.STANDARD end
-    local lower = taskName:lower()
+function Tracker:LearnRelativeScales()
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then return {}, 0 end
 
-    if lower:find("raid boss") or lower:find("kill raid") then
-        return VE.Constants.TASK_MULTIPLIERS.RAID_BOSS
-    elseif lower:find("profession rare") then
-        return VE.Constants.TASK_MULTIPLIERS.PROFESSION_RARE
-    end
+    -- 1. Sort Chronologically
+    local sorted = {}
+    for _, entry in ipairs(logInfo.taskActivity) do table.insert(sorted, entry) end
+    table.sort(sorted, function(a, b) return (a.completionTime or 0) < (b.completionTime or 0) end)
 
-    return VE.Constants.TASK_MULTIPLIERS.STANDARD
-end
+    -- 2. Build Candidates
+    local uniqueChars = {}
+    local currentRosterSize = 0
+    local charTaskHistory = {}
+    local candidates = {}
 
--- Get base XP value for a task (before scaling) - for contribution formula
-function Tracker:GetTaskBaseValue(taskName)
-    if not taskName then return 50 end
-    local lower = taskName:lower()
-    local baseValues = VE.Constants.TASK_BASE_VALUES
+    for _, entry in ipairs(sorted) do
+        local char = entry.playerName
+        local task = entry.taskName
+        local xp = entry.amount
 
-    for pattern, base in pairs(baseValues) do
-        if lower:find(pattern:lower()) then
-            return base
-        end
-    end
+        if char and task and xp and xp > 0.01 then
+            if not uniqueChars[char] then
+                uniqueChars[char] = true
+                currentRosterSize = currentRosterSize + 1
+            end
 
-    return 50  -- Default for unknown tasks
-end
-
--- Check if task is a raid boss task (by name pattern)
-function Tracker:IsRaidBossTask(taskName)
-    if not taskName then return false end
-    local lower = taskName:lower()
-    return lower:find("raid boss") or lower:find("kill raid")
-end
-
--- Check if task is one-time (100% first run, 0% after)
-function Tracker:IsOneTimeTask(taskName)
-    if not taskName then return false end
-    local lower = taskName:lower()
-    return lower:find("profession rare") or lower:find("daily quest")
-end
-
--- Calculate DR multiplier for contribution formula
--- One-Time: 100% first run, 0% after (Profession Rare, Daily Quests)
--- Raid Boss: 100% for runs 1-2, 50% for runs 3-5, 0% for runs 6+
--- Standard: max(0.20, 1 - 0.20 × (N - 1))
-function Tracker:CalculateDRMultiplier(completions, isRaidBoss, isOneTime)
-    local runCount = completions + 1
-    if isOneTime then
-        -- One-time tasks: full reward first run only
-        return runCount > 1 and 0.0 or 1.0
-    elseif isRaidBoss then
-        if runCount <= 2 then return 1.0
-        elseif runCount <= 5 then return 0.5
-        else return 0 end
-    else
-        -- Standard linear decay with 20% floor
-        return math.max(0.20, 1 - 0.20 * (runCount - 1))
-    end
-end
-
--- ============================================================================
--- NEW HOUSE XP FORMULA (based on decay table)
--- Categories: ONE-TIME, ACCELERATED (-25%), STANDARD (-20%), FLAT (no decay)
--- ============================================================================
-
--- Task definitions with base values and decay rules
-local TASK_DATA = {
-    -- ONE-TIME TASKS (100% first run, then 0% forever)
-    { patterns = {"profession rare"}, base = 150, decay = "onetime" },
-    { patterns = {"daily quest"}, base = 50, decay = "onetime" },
-    { patterns = {"champion", "faction envoy"}, base = 10, decay = "onetime" },
-
-    -- MAJOR OBJECTIVES - Accelerated decay (-25% per completion, floor 25%)
-    { patterns = {"weekly", "neighborhood"}, base = 50, decay = "accelerated" },
-    { patterns = {"war creche", "subdue"}, base = 50, decay = "accelerated" },
-    { patterns = {"primal storm"}, base = 50, decay = "accelerated" },
-
-    -- MAJOR GRIND - Standard decay (-20% per completion, floor 20%)
-    { patterns = {"lumber", "harvest lumber"}, base = 50, decay = "standard" },
-    { patterns = {"good neighbor", "be a good"}, base = 50, decay = "standard" },
-
-    -- STANDARD GRIND - Standard decay (-20% per completion, floor 20%)
-    { patterns = {"forbidden hoard", "loot a forbidden"}, base = 25, decay = "standard" },
-    { patterns = {"gather", "herbs", "ores", "skins"}, base = 25, decay = "standard" },
-    { patterns = {"kill rare", "rares"}, base = 25, decay = "standard" },
-    { patterns = {"kill creature", "creatures"}, base = 25, decay = "standard" },
-    { patterns = {"zskera", "vault door"}, base = 25, decay = "standard" },
-    { patterns = {"sealed scroll"}, base = 25, decay = "standard" },
-    { patterns = {"pet battle"}, base = 25, decay = "standard" },
-
-    -- MINOR GRIND - Standard decay (-20% per completion, floor 20%)
-    { patterns = {"skyriding", "race"}, base = 10, decay = "standard" },
-    { patterns = {"delve"}, base = 10, decay = "standard" },
-    { patterns = {"mythic"}, base = 10, decay = "standard" },
-    { patterns = {"world quest"}, base = 10, decay = "standard" },
-    { patterns = {"honor"}, base = 10, decay = "standard" },
-
-    -- SPECIAL - Flat (no decay)
-    { patterns = {"raid boss", "kill raid"}, base = 5, decay = "flat" },
-}
-
--- Get task info (base value and decay type) from task name
-function Tracker:GetTaskInfo(taskName)
-    if not taskName then return { base = 50, decay = "standard" } end
-    local lower = taskName:lower()
-
-    for _, taskDef in ipairs(TASK_DATA) do
-        for _, pattern in ipairs(taskDef.patterns) do
-            if lower:find(pattern) then
-                return { base = taskDef.base, decay = taskDef.decay }
+            -- Capture all first-seen runs for this char/task combo
+            charTaskHistory[char] = charTaskHistory[char] or {}
+            if not charTaskHistory[char][task] then
+                charTaskHistory[char][task] = true
+                table.insert(candidates, {
+                    task = task,
+                    xp = xp,
+                    roster = currentRosterSize
+                })
             end
         end
     end
 
-    return { base = 50, decay = "standard" }  -- Default
+    -- 3. Establish Tier 1 Anchors
+    local taskBaselines = {}
+    for _, data in ipairs(candidates) do
+        -- Strict Anchor: Baseline must come from Roster 1 or 2
+        if data.roster <= 2 then
+            if not taskBaselines[data.task] or data.xp > taskBaselines[data.task] then
+                taskBaselines[data.task] = data.xp
+            end
+        end
+    end
+
+    -- 4. Calculate Raw High-Watermarks
+    -- This captures the "Best Case" for each roster size, but still includes decay pits.
+    local rawMaxScales = {}
+    for _, data in ipairs(candidates) do
+        local baseline = taskBaselines[data.task]
+        if baseline then
+            local ratio = data.xp / baseline
+            if ratio <= 1.1 then -- Filter obvious bugs only
+                local current = rawMaxScales[data.roster] or 0
+                if ratio > current then
+                    rawMaxScales[data.roster] = ratio
+                end
+            end
+        end
+    end
+
+    -- 5. The Reverse Envelope (First Principles Fix)
+    -- We enforce the invariant: Reward[N-1] >= Reward[N].
+    -- We iterate backwards. If we see a "pit" (low value followed by high value),
+    -- we pull the high value backwards to fill the pit.
+
+    local finalScales = {}
+    local futureSupport = 0 -- The highest sustainable floor seen in the future
+
+    for i = currentRosterSize, 1, -1 do
+        local raw = rawMaxScales[i] or 0
+
+        -- The true scale is at least the Raw value we observed...
+        -- BUT it must also be at least as high as what we observed for N+1.
+        local corrected = math.max(raw, futureSupport)
+
+        finalScales[i] = tonumber(string.format("%.3f", corrected))
+
+        -- Carry this support level backwards to Roster i-1
+        futureSupport = corrected
+    end
+
+    -- 6. Safety Fill (Start of Array)
+    -- If Roster 1/2 had no data (unlikely), ensure they default to 1.0 or next known
+    if (finalScales[1] or 0) == 0 then finalScales[1] = 1.0 end
+
+    -- Forward pass: Fill zeros AND cap suspicious drops
+    -- Scale CAPS at ~92.5%, so any drop > 10% from previous is contaminated
+    local lastVal = 1.0
+    for i = 1, currentRosterSize do
+        local current = finalScales[i] or 0
+        if current == 0 then
+            -- No data: inherit from previous
+            finalScales[i] = lastVal
+        elseif current < lastVal * 0.85 then
+            -- Drop > 15% is contaminated (decay pit): inherit from previous
+            finalScales[i] = lastVal
+        end
+        lastVal = finalScales[i]
+    end
+
+    return finalScales, currentRosterSize
 end
 
--- Calculate decay multiplier based on completion count and decay type
--- Run 1 = completions 0, Run 2 = completions 1, etc.
-function Tracker:CalculateDecayMultiplier(completions, decayType)
-    local run = completions + 1  -- Next run number
+-- Get the relative scale for current roster size
+function Tracker:GetRelativeScale()
+    local learnedScales, currentRoster = self:LearnRelativeScales()
 
-    if decayType == "onetime" then
-        -- 100% first run, 0% forever after
-        return run == 1 and 1.0 or 0
+    -- Find exact match or nearest lower
+    if learnedScales[currentRoster] then
+        return learnedScales[currentRoster], currentRoster
+    end
 
-    elseif decayType == "accelerated" then
-        -- -25% per completion, floor at 25%
-        -- Run 1: 100%, Run 2: 75%, Run 3: 50%, Run 4: 25%, Run 5+: 25%
-        return math.max(0.25, 1 - 0.25 * (run - 1))
+    local nearest = nil
+    for size in pairs(learnedScales) do
+        if size <= currentRoster and (not nearest or size > nearest) then
+            nearest = size
+        end
+    end
 
-    elseif decayType == "flat" then
-        -- Flat for first 5 runs, then 0% at run 6+
-        return run <= 5 and 1.0 or 0
+    return nearest and learnedScales[nearest] or 1.0, currentRoster
+end
 
-    else -- "standard"
-        -- -20% per completion, floor at 20%
-        -- Run 1: 100%, Run 2: 80%, Run 3: 60%, Run 4: 40%, Run 5: 20%, Run 6+: 20%
-        return math.max(0.20, 1 - 0.20 * (run - 1))
+-- Reset learned task rules (triggers re-learning from activity log)
+function Tracker:ResetTaskRules()
+    self.taskRules = {}
+    -- Clean up legacy SavedVariables data
+    if VE_DB then
+        VE_DB.taskRules = nil
+        VE_DB.learnedFormula = nil
+        VE_DB.formulaCheckpoint = nil
     end
 end
 
--- Calculate next House XP reward (raw value, not scaled by roster)
--- Formula: Base × Decay_Multiplier
-function Tracker:CalculateNextXP(taskName, completions, _rosterScale)
-    -- Note: _rosterScale param kept for API compatibility but not used in new formula
-    local taskInfo = self:GetTaskInfo(taskName)
-    local decayMult = self:CalculateDecayMultiplier(completions, taskInfo.decay)
+-- Load learned values on init
+function Tracker:LoadLearnedValues()
+    -- taskRules rebuilt from activity log on INITIATIVE_ACTIVITY_LOG_UPDATED - no persistence needed
+    self.taskRules = {}
+    -- Clean up legacy SavedVariables data
+    if VE_DB then
+        VE_DB.learnedFormula = nil
+        VE_DB.taskRules = nil
+        VE_DB.formulaCheckpoint = nil
+    end
+end
 
-    return taskInfo.base * decayMult
+-- Save/Load per-task rules removed - rebuilt fresh from activity log each time
+
+-- ============================================================================
+-- PER-TASK DECAY LEARNING (Simplified System)
+-- Each task learns its own decay rate and floor from observed completions
+-- ============================================================================
+
+-- Learn rules for a specific task from two observed XP values
+-- Only observes: atFloor, floorXP (observed), pattern. Scale is global.
+function Tracker:LearnTaskRules(taskName, last, prev)
+    if not taskName or not last or not prev then return end
+
+    self.taskRules[taskName] = self.taskRules[taskName] or {}
+    local rules = self.taskRules[taskName]
+
+    -- Ensure prev >= last (prev is earlier = higher XP)
+    if last > prev then prev, last = last, prev end
+
+    if math.abs(last - prev) < 0.001 then
+        -- AT FLOOR: consecutive same values
+        rules.atFloor = true
+        rules.floorXP = last  -- Observed floor XP (for validation)
+
+    elseif prev > last then
+        -- DECAYING: not at floor yet
+        -- Detect raid boss pattern (value drops to 0)
+        if last < 0.01 and prev > 0.1 then
+            rules.pattern = "raidboss"
+            rules.atFloor = true
+            rules.floorXP = 0
+        elseif not rules.atFloor then
+            rules.atFloor = false
+        end
+    end
+
+    rules.lastUpdated = time()
+    rules.dataPoints = (rules.dataPoints or 0) + 1
+end
+
+-- Build task rules from activity log (works backwards from recent entries)
+-- FRESH BUILD: Clears existing rules and rebuilds entirely from activity log
+function Tracker:BuildTaskRulesFromLog()
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then return end
+
+    local debug = VE.Store:GetState().config.debug
+    if debug then
+        print("|cFF2aa198[VE TaskRules]|r Building rules from activity log...")
+    end
+
+    -- CRITICAL: Start fresh - no stale SavedVariables data
+    self.taskRules = {}
+
+    -- Group by taskName + playerName, keeping only the 2 most recent per player
+    -- Structure: recentByTask[taskName][playerKey] = { last, lastTime, prev }
+    local recentByTask = {}
+
+    for _, entry in ipairs(logInfo.taskActivity) do
+        local task = entry.taskName
+        local player = entry.playerName
+        local amount = entry.amount
+        local completionTime = entry.completionTime or 0
+
+        if task and player and amount then  -- Keep 0 values for raid boss pattern detection
+            local key = task .. "|" .. player
+            recentByTask[task] = recentByTask[task] or {}
+
+            if not recentByTask[task][key] then
+                -- First entry for this player+task
+                recentByTask[task][key] = {
+                    last = amount,
+                    lastTime = completionTime
+                }
+            elseif completionTime > recentByTask[task][key].lastTime then
+                -- Newer entry found - shift previous
+                recentByTask[task][key].prev = recentByTask[task][key].last
+                recentByTask[task][key].last = amount
+                recentByTask[task][key].lastTime = completionTime
+            elseif not recentByTask[task][key].prev then
+                -- Second entry for this player (older than last)
+                recentByTask[task][key].prev = amount
+            end
+        end
+    end
+
+    -- Analyze each task's recent completions
+    local rulesLearned = 0
+    for taskName, players in pairs(recentByTask) do
+        for _, data in pairs(players) do
+            if data.prev then
+                -- We have 2 data points - can learn rules
+                self:LearnTaskRules(taskName, data.last, data.prev)
+                rulesLearned = rulesLearned + 1
+            end
+        end
+    end
+
+    if debug then
+        print("|cFF2aa198[VE TaskRules]|r Learned rules for " .. rulesLearned .. " task+player combinations")
+        for taskName, rules in pairs(self.taskRules) do
+            print(string.format("  %s: floorXP=%.3f%s",
+                taskName,
+                rules.floorXP or 0,
+                rules.atFloor and " (at floor)" or " (decaying)"))
+        end
+    end
+    -- No SaveTaskRules() - we rebuild from activity log each time
+end
+
+-- Show per-task learned rules (/ve rules command)
+function Tracker:ShowTaskRules(filterTask)
+    print("|cFF2aa198[VE TaskRules]|r === Per-Task Rules ===")
+
+    local relativeScale, rosterSize = self:GetRelativeScale()
+    print(string.format("  Relative scale: |cFF268bd2%.3f|r (%.1f%%) | Roster: %d chars",
+        relativeScale, relativeScale * 100, rosterSize))
+
+    if not self.taskRules or not next(self.taskRules) then
+        print("  No rules learned yet. Complete some tasks to learn rules.")
+        return
+    end
+
+    local count = 0
+    for taskName, rules in pairs(self.taskRules) do
+        if not filterTask or taskName:lower():find(filterTask:lower()) then
+            count = count + 1
+            local pattern = rules.pattern and string.format(" |cFF6c71c4[%s]|r", rules.pattern) or ""
+
+            -- Get calculated values from API
+            local task = self:GetTaskByName(taskName)
+            local currentContrib = task and task.progressContributionAmount or 0
+            local timesCompleted = task and task.timesCompleted or 0
+            -- Determine floor status from API, not historical activity log
+            local isAtFloor = timesCompleted >= COMPLETIONS_TO_FLOOR
+            local status = isAtFloor and "|cFF859900(at floor)|r" or "|cFFcb4b16(decaying)|r"
+            local baseContrib = self:GetBaseTaskContribution(taskName)
+            local calcFloorXP = self:CalculateFloorXP(taskName)
+            local nextXP = self:CalculateNextContribution(taskName)
+
+            print(string.format("  |cFFb58900%s|r%s %s", taskName, pattern, status))
+            print(string.format("    API: current=|cFF93a1a1%d|r timesCompleted=|cFF93a1a1%d|r",
+                currentContrib, timesCompleted))
+            print(string.format("    Calc: base=|cFF859900%d|r floorXP=|cFF859900%.3f|r nextXP=|cFF859900%.3f|r",
+                baseContrib, calcFloorXP, nextXP))
+            if rules.floorXP and rules.floorXP > 0 then
+                print(string.format("    Observed: floorXP=|cFF268bd2%.3f|r", rules.floorXP))
+            end
+        end
+    end
+
+    if count == 0 then
+        print("  No matching tasks found for filter: " .. (filterTask or ""))
+    else
+        print(string.format("|cFF2aa198[VE TaskRules]|r %d task(s) shown", count))
+    end
+end
+
+-- Show learned relative scales (/ve scales command)
+-- Only shows roster sizes where scale CHANGES (not every data point)
+function Tracker:ShowRelativeScales()
+    print("|cFF2aa198[VE Scale]|r === Learned Roster Scale ===")
+
+    local rosterSize = self:GetRosterSize()
+    local learnedScales, _ = self:LearnRelativeScales()
+    local currentScale, _ = self:GetRelativeScale()
+
+    print(string.format("  Roster: |cFF268bd2%d|r chars | Scale: |cFF859900%.3f|r (%.1f%%)",
+        rosterSize, currentScale, currentScale * 100))
+    print("  Method: High-watermark + Tier 1 Anchor")
+
+    if learnedScales and next(learnedScales) then
+        local sizes = {}
+        for size in pairs(learnedScales) do
+            table.insert(sizes, size)
+        end
+        table.sort(sizes)
+
+        -- Only show entries where scale changes (threshold: 0.01)
+        local lastScale = nil
+        for _, size in ipairs(sizes) do
+            local scale = learnedScales[size]
+            if not lastScale or math.abs(scale - lastScale) > 0.01 then
+                local marker = (size == rosterSize) and " |cFFb58900<--|r" or ""
+                print(string.format("    [%2d]: |cFF859900%.3f|r%s", size, scale, marker))
+                lastScale = scale
+            end
+        end
+
+        -- Show if scale has capped
+        local minScale = 1.0
+        for _, scale in pairs(learnedScales) do
+            if scale < minScale then minScale = scale end
+        end
+        if minScale < 1.0 and minScale > 0.9 then
+            print(string.format("  Scale CAPS at: |cFFcb4b16%.1f%%|r of baseline", minScale * 100))
+        end
+    else
+        print("  No scale data (need tasks with Tier 1 baseline at roster 1-2)")
+    end
+end
+
+-- Refresh learned values (call on activity log update)
+function Tracker:RefreshLearnedValues()
+    self:BuildTaskRulesFromLog()
+    -- Scale is now learned via LearnRelativeScales() on demand
+end
+
+
+-- Debug command: show learned values
+function Tracker:ValidateFormulaConfig()
+    print("|cFF2aa198[VE Validate]|r === Formula Status ===")
+
+    -- Scale (learned from activity log via LearnRelativeScales)
+    local relativeScale, rosterSize = self:GetRelativeScale()
+    print(string.format("  Relative scale: %.3f (%.1f%%) | Roster: %d chars",
+        relativeScale or 1, (relativeScale or 1) * 100, rosterSize or 0))
+
+    -- Per-task rules summary
+    local ruleCount = 0
+    local atFloorCount = 0
+    if self.taskRules then
+        for _, rules in pairs(self.taskRules) do
+            ruleCount = ruleCount + 1
+            if rules.atFloor then atFloorCount = atFloorCount + 1 end
+        end
+    end
+    print(string.format("  Task rules: %d learned (%d at floor)", ruleCount, atFloorCount))
+    print("  Use '/ve rules' to see per-task decay rules")
+
+    print("|cFF2aa198[VE Validate]|r === End ===")
+end
+
+-- Look up task object from current initiative by name
+function Tracker:GetTaskByName(taskName)
+    if not taskName then return nil end
+    local state = VE.Store:GetState()
+    if state and state.tasks then
+        for _, task in ipairs(state.tasks) do
+            if task.name == taskName then
+                return task
+            end
+        end
+    end
+    return nil
+end
+
+-- Get current contribution (decayed value from API progressContributionAmount)
+-- This is what you'd earn on NEXT completion, pre-scale
+function Tracker:GetCurrentContribution(task)
+    if type(task) == "string" then
+        task = self:GetTaskByName(task)
+    end
+    if not task then return 0 end
+    return task.progressContributionAmount or 0
+end
+
+-- Get times completed for a task
+function Tracker:GetTimesCompleted(task)
+    if type(task) == "string" then
+        task = self:GetTaskByName(task)
+    end
+    if not task then return 0 end
+    return task.timesCompleted or 0
+end
+
+-- Calculate BaseTaskContribution by working backwards from current decayed value
+-- BaseTaskContribution = progressContributionAmount / currentDecayMultiplier
+function Tracker:GetBaseTaskContribution(task)
+    if type(task) == "string" then
+        task = self:GetTaskByName(task)
+    end
+    if not task then return 0 end
+
+    local currentContribution = task.progressContributionAmount or 0
+    if currentContribution == 0 then return 0 end
+
+    local timesCompleted = task.timesCompleted or 0
+    local nextRun = math.min(timesCompleted + 1, COMPLETIONS_TO_FLOOR)
+    local currentDecay = self:GetDecayMultiplier(nextRun)
+
+    return currentContribution / currentDecay
+end
+
+-- LEGACY: GetTaskInfo returns currentContribution as 'base' for backwards compatibility
+-- TODO: Update callers to use GetCurrentContribution directly
+function Tracker:GetTaskInfo(task)
+    local currentContribution = self:GetCurrentContribution(task)
+    return { base = currentContribution }
 end
 
 -- ============================================================================
 -- CONTRIBUTION-BASED FORMULA (for Best Next Endeavor ranking)
--- Formula: Base × Roster_Scale × DR_Multiplier (gives actual XP contribution)
+-- Uses COMPLETIONS_TO_FLOOR as only hardcoded config value
 -- ============================================================================
 
--- Calculate next contribution using roster scale (for rankings/tooltips)
--- Formula: Base_Value × Roster_Scale × Task_Multiplier × DR_Multiplier
-function Tracker:CalculateNextContribution(taskName, completions)
-    local rosterScale = self:DetectRosterScale()
-    local baseValue = self:GetTaskBaseValue(taskName)  -- From VE.Constants.TASK_BASE_VALUES
-    local taskMultiplier = self:GetTaskMultiplier(taskName)
-    local isRaidBoss = self:IsRaidBossTask(taskName)
-    local isOneTime = self:IsOneTimeTask(taskName)
-    local drMultiplier = self:CalculateDRMultiplier(completions, isRaidBoss, isOneTime)
+-- Calculate decay multiplier using formula derived from COMPLETIONS_TO_FLOOR
+-- @param run: Which run this is (1 = first, 2 = second, etc.)
+-- @return multiplier (0.0 to 1.0)
+function Tracker:GetDecayMultiplier(run)
+    if run < 1 then run = 1 end
+    local floorPct = 1 / COMPLETIONS_TO_FLOOR  -- 0.20 for standard
+    local decayRate = (1 - floorPct) / (COMPLETIONS_TO_FLOOR - 1)  -- 0.20 for standard
+    return math.max(floorPct, 1 - decayRate * (run - 1))
+end
 
-    return baseValue * rosterScale * taskMultiplier * drMultiplier
+-- Calculate next contribution using roster scale (for rankings/tooltips)
+function Tracker:CalculateNextContribution(taskName, _completions)
+    local task = self:GetTaskByName(taskName)
+    if not task then return 0 end
+
+    local timesCompleted = task.timesCompleted or 0
+    local isAtFloor = timesCompleted >= COMPLETIONS_TO_FLOOR
+
+    -- If at floor and we have observed floor XP, use it directly (most accurate)
+    if isAtFloor then
+        local rules = self.taskRules and self.taskRules[taskName]
+        if rules and rules.floorXP and rules.floorXP > 0 then
+            return rules.floorXP
+        end
+    end
+
+    -- Otherwise use API's progressContributionAmount (already decay-adjusted)
+    -- This is the raw contribution - caller should apply relative scale if needed
+    local currentContribution = task.progressContributionAmount or 0
+    return currentContribution
+end
+
+-- Calculate floor XP for a task (what you'd earn at floor)
+function Tracker:CalculateFloorXP(taskName)
+    -- If we have observed floor XP, use it directly (from activity log)
+    local rules = self.taskRules and self.taskRules[taskName]
+    if rules and rules.floorXP and rules.floorXP > 0 then
+        return rules.floorXP
+    end
+
+    -- No observed floor XP - can't calculate without reference point
+    return 0
+end
+
+-- Calculate first run XP for a task (what you'd earn on first completion)
+function Tracker:CalculateFirstRunXP(taskName)
+    -- Derive from observed floor: firstRun = floor / floorPct = floor * 5
+    local floorXP = self:CalculateFloorXP(taskName)
+    if floorXP > 0 then
+        return floorXP * COMPLETIONS_TO_FLOOR  -- floorXP / 0.20 = floorXP * 5
+    end
+
+    -- No observed data - can't calculate
+    return 0
 end
 
 -- Get task rankings by next contribution value for current player
