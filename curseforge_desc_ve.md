@@ -8,12 +8,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.3 - Improved XP Predictions**
+## **What's New in v1.6.4 - Value Change Handling**
 
-- **Accurate Multi-House Support** - Each house now calculates its own XP scale from activity data
-- **Simplified Formula** - Predictions now use API-provided decay values for perfect accuracy
-- **Best Next Endeavor** - Gold/silver/bronze highlighting shows top 3 tasks by predicted XP
-- **House Switching Fixed** - XP predictions now correctly update when switching houses
+- **New Debug Command** - `/ve scale` shows current scale factor and derivation source
+- **Better Value Adaptation** - Floor XP learning now prefers most recent observations
+- **Handles Blizzard Changes** - When Blizzard adjusts endeavor values mid-season, the addon adapts correctly
 
 *See CHANGELOG.txt for complete version history*
 
@@ -133,5 +132,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.3
+**Version:** 1.6.4
 **Game Version:** 12.0.0+ (Midnight)

@@ -2,6 +2,21 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.4 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW DEBUG COMMAND:
+- Added /ve scale - Shows current scale factor, roster size, and floor tasks
+  used for scale derivation
+
+BUG FIXES:
+- Fixed floor XP learning to prefer most recent observation
+  - Previously, older player data could overwrite newer observations
+  - Now tracks observation timestamps and uses the most recent floor value
+  - Handles Blizzard mid-season value changes correctly
+
+--------------------------------------------------------------------------------
+
 Version 1.6.3 (Released January 2026)
 --------------------------------------------------------------------------------
 

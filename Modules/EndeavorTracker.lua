@@ -1085,7 +1085,8 @@ end
 
 -- Learn rules for a specific task from two observed XP values
 -- Only observes: atFloor, floorXP (observed), pattern. Scale is global.
-function Tracker:LearnTaskRules(taskName, last, prev)
+-- observationTime: timestamp of the most recent observation (to prefer newer data)
+function Tracker:LearnTaskRules(taskName, last, prev, observationTime)
     if not taskName or not last or not prev then return end
 
     self.taskRules[taskName] = self.taskRules[taskName] or {}
@@ -1096,16 +1097,23 @@ function Tracker:LearnTaskRules(taskName, last, prev)
 
     if math.abs(last - prev) < 0.001 then
         -- AT FLOOR: consecutive same values
-        rules.atFloor = true
-        rules.floorXP = last  -- Observed floor XP (for validation)
+        -- Only update floorXP if this observation is more recent
+        if not rules.floorXPTime or (observationTime and observationTime > rules.floorXPTime) then
+            rules.atFloor = true
+            rules.floorXP = last
+            rules.floorXPTime = observationTime or time()
+        end
 
     elseif prev > last then
         -- DECAYING: not at floor yet
         -- Detect raid boss pattern (value drops to 0)
         if last < 0.01 and prev > 0.1 then
-            rules.pattern = "raidboss"
-            rules.atFloor = true
-            rules.floorXP = 0
+            if not rules.floorXPTime or (observationTime and observationTime > rules.floorXPTime) then
+                rules.pattern = "raidboss"
+                rules.atFloor = true
+                rules.floorXP = 0
+                rules.floorXPTime = observationTime or time()
+            end
         elseif not rules.atFloor then
             rules.atFloor = false
         end
@@ -1166,8 +1174,8 @@ function Tracker:BuildTaskRulesFromLog()
     for taskName, players in pairs(recentByTask) do
         for _, data in pairs(players) do
             if data.prev then
-                -- We have 2 data points - can learn rules
-                self:LearnTaskRules(taskName, data.last, data.prev)
+                -- We have 2 data points - can learn rules (pass timestamp to prefer newer observations)
+                self:LearnTaskRules(taskName, data.last, data.prev, data.lastTime)
                 rulesLearned = rulesLearned + 1
             end
         end
@@ -1295,6 +1303,51 @@ function Tracker:ValidateFormulaConfig()
     print("  Use '/ve rules' for per-task details")
 
     print("|cFF2aa198[VE Validate]|r === End ===")
+end
+
+-- Debug: Show current scale factor and derivation (/ve scale)
+function Tracker:ShowScaleDebug()
+    print("|cFF2aa198[VE Scale]|r === Scale Debug ===")
+
+    -- Get roster size
+    local rosterSize = self:GetRosterSize()
+    print(string.format("  Roster size: |cFF268bd2%d|r characters", rosterSize))
+
+    -- Check if we have a cached scale
+    local hadCached = self.cachedAbsoluteScale ~= nil
+    local scale = self:GetAbsoluteScale()
+    local source = hadCached and "(cached)" or (self.cachedAbsoluteScale and "(derived from floor task)" or "(fallback)")
+    print(string.format("  Scale factor: |cFF268bd2%.6f|r %s", scale, source))
+
+    -- Find which floor task we derived scale from (exclude zero-floor tasks)
+    local tasks = VE.Store:GetState().tasks or {}
+    local floorTasks = {}
+    for _, task in ipairs(tasks) do
+        if (task.timesCompleted or 0) >= COMPLETIONS_TO_FLOOR then
+            local rules = self.taskRules and self.taskRules[task.name]
+            local apiContrib = task.progressContributionAmount or 0
+            if rules and rules.floorXP and rules.floorXP > 0 and apiContrib > 0 then
+                table.insert(floorTasks, {
+                    name = task.name,
+                    floorXP = rules.floorXP,
+                    apiContrib = apiContrib,
+                    derivedScale = rules.floorXP / apiContrib
+                })
+            end
+        end
+    end
+
+    if #floorTasks > 0 then
+        print("  |cFF859900Floor tasks used for scale derivation:|r")
+        for _, ft in ipairs(floorTasks) do
+            print(string.format("    %s: floorXP=%.2f / apiContrib=%d = %.6f",
+                ft.name, ft.floorXP, ft.apiContrib, ft.derivedScale))
+        end
+    else
+        print("  |cFFcb4b16No floor tasks available - using fallback scale|r")
+    end
+
+    print("|cFF2aa198[VE Scale]|r === End ===")
 end
 
 -- Debug: Dump all fields from activity log entries (/ve dumplog)

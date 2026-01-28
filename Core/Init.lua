@@ -696,6 +696,13 @@ SlashCmdList["VE"] = function(msg)
                 end
             end
         end
+    elseif command == "scale" then
+        -- Show current scale factor and how it was derived
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:ShowScaleDebug()
+        else
+            print("|cFFdc322f[VE]|r EndeavorTracker not loaded")
+        end
     elseif command == "validate" then
         -- Show learned XP formula values vs config defaults
         if VE.EndeavorTracker then
@@ -756,6 +763,7 @@ SlashCmdList["VE"] = function(msg)
         print("  /ve initiatives - List discovered initiative types")
         print("  /ve roster - Request roster data (shows in window)")
         print("  /ve apis - List all housing APIs (shows in window)")
+        print("  /ve scale - Show current scale factor")
         print("  /ve validate - Show learned XP formula values")
         print("  /ve rules - Show per-task decay rules (new system)")
         print("  /ve rules [taskname] - Show rules for specific task")
