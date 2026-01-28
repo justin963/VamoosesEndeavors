@@ -847,8 +847,12 @@ function VE.UI:CreateTaskRow(parent, options)
             if self.task.isRepeatable and self.task.timesCompleted and self.task.timesCompleted > 0 then
                 GameTooltip:AddLine("Completed: " .. self.task.timesCompleted .. " times", 0.5, 0.8, 0.5)
             end
-            -- Show next XP prediction for repeatable tasks
+            -- Show next contribution prediction for repeatable tasks
             if self.task.isRepeatable and not self.task.completed and VE.EndeavorTracker then
+                -- Show raw API progressContributionAmount (House XP the player receives)
+                if self.task.progressContributionAmount and self.task.progressContributionAmount > 0 then
+                    GameTooltip:AddLine(string.format("House XP (API): %d", self.task.progressContributionAmount), 0.6, 0.6, 0.6)
+                end
                 if self.ranking and self.ranking.nextXP then
                     -- Ranked task (top 3) - show with rank label and color
                     local rankLabels = { "Best", "2nd Best", "3rd Best" }
@@ -858,7 +862,7 @@ function VE.UI:CreateTaskRow(parent, options)
                     -- Non-ranked task - calculate on-the-fly
                     local completions = VE.EndeavorTracker:GetAccountCompletionCount(self.task.id)
                     local nextXP = VE.EndeavorTracker:CalculateNextContribution(self.task.name, completions)
-                    GameTooltip:AddLine(string.format("Next XP: +%.3f", nextXP), 0.7, 0.7, 0.7)
+                    GameTooltip:AddLine(string.format("Next House XP: +%.3f", nextXP), 0.7, 0.7, 0.7)
                 end
             end
             -- Tracking hint

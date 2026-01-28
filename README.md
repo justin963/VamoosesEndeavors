@@ -6,11 +6,10 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.4 - Value Change Handling**
+## **What's New in v1.6.5 - Tooltip Improvements**
 
-- **New Debug Command** - `/ve scale` shows current scale factor and derivation source
-- **Better Value Adaptation** - Floor XP learning now prefers most recent observations
-- **Handles Blizzard Changes** - When Blizzard adjusts endeavor values mid-season, the addon adapts correctly
+- **Clearer Labels** - "Next XP" renamed to "Next House XP" for clarity
+- **API Values Shown** - Tooltip now displays raw House XP from Blizzard API
 
 *See CHANGELOG.txt for complete version history*
 
@@ -137,5 +136,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.4
+**Version:** 1.6.5
 **Game Version:** 12.0.0+ (Midnight)

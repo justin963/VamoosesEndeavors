@@ -2,6 +2,15 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.5 (Released January 2026)
+--------------------------------------------------------------------------------
+
+TOOLTIP IMPROVEMENTS:
+- Renamed "Next XP" to "Next House XP" for clarity
+- Added "House XP (API)" line showing raw progressContributionAmount from API
+
+--------------------------------------------------------------------------------
+
 Version 1.6.4 (Released January 2026)
 --------------------------------------------------------------------------------
 
