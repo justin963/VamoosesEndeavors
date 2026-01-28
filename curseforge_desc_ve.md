@@ -4,6 +4,8 @@
 
 See your neighborhood initiative tasks, track completion across alts, and never miss out on endeavor rewards.
 
+> **Featured on [Icy Veins](https://www.icy-veins.com/wow/news/players-are-missing-housing-rewards-these-2-addons-fix-it/)!** *"Players Are Missing Housing Rewards - These 2 Addons Fix It"*
+
 ---
 
 ## **What's New in v1.6.3 - Improved XP Predictions**
