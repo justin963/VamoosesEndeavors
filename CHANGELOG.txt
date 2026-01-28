@@ -2,6 +2,15 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.6 (Released January 2026)
+--------------------------------------------------------------------------------
+
+TOOLTIP IMPROVEMENTS:
+- "Next House XP" now shows raw progressContributionAmount (what player receives)
+- "Next Endeavor Contribution" shows calculated neighborhood contribution
+
+--------------------------------------------------------------------------------
+
 Version 1.6.5 (Released January 2026)
 --------------------------------------------------------------------------------
 

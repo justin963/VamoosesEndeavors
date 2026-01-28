@@ -6,10 +6,10 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.5 - Tooltip Improvements**
+## **What's New in v1.6.6 - Tooltip Labels**
 
-- **Clearer Labels** - "Next XP" renamed to "Next House XP" for clarity
-- **API Values Shown** - Tooltip now displays raw House XP from Blizzard API
+- **Next House XP** - Shows raw progressContributionAmount (what you receive)
+- **Next Endeavor Contribution** - Shows calculated neighborhood contribution
 
 *See CHANGELOG.txt for complete version history*
 
@@ -136,5 +136,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.5
+**Version:** 1.6.6
 **Game Version:** 12.0.0+ (Midnight)

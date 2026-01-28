@@ -851,18 +851,18 @@ function VE.UI:CreateTaskRow(parent, options)
             if self.task.isRepeatable and not self.task.completed and VE.EndeavorTracker then
                 -- Show raw API progressContributionAmount (House XP the player receives)
                 if self.task.progressContributionAmount and self.task.progressContributionAmount > 0 then
-                    GameTooltip:AddLine(string.format("House XP (API): %d", self.task.progressContributionAmount), 0.6, 0.6, 0.6)
+                    GameTooltip:AddLine(string.format("Next House XP: %d", self.task.progressContributionAmount), 0.6, 0.6, 0.6)
                 end
                 if self.ranking and self.ranking.nextXP then
                     -- Ranked task (top 3) - show with rank label and color
                     local rankLabels = { "Best", "2nd Best", "3rd Best" }
                     local rankColor = self.rankColors[self.ranking.rank] or { r = 1, g = 1, b = 1 }
-                    GameTooltip:AddLine(string.format("%s Next Endeavor: +%.3f", rankLabels[self.ranking.rank] or "", self.ranking.nextXP), rankColor.r, rankColor.g, rankColor.b)
+                    GameTooltip:AddLine(string.format("%s Next Endeavor Contribution: +%.3f", rankLabels[self.ranking.rank] or "", self.ranking.nextXP), rankColor.r, rankColor.g, rankColor.b)
                 else
                     -- Non-ranked task - calculate on-the-fly
                     local completions = VE.EndeavorTracker:GetAccountCompletionCount(self.task.id)
                     local nextXP = VE.EndeavorTracker:CalculateNextContribution(self.task.name, completions)
-                    GameTooltip:AddLine(string.format("Next House XP: +%.3f", nextXP), 0.7, 0.7, 0.7)
+                    GameTooltip:AddLine(string.format("Next Endeavor Contribution: +%.3f", nextXP), 0.7, 0.7, 0.7)
                 end
             end
             -- Tracking hint
