@@ -194,20 +194,22 @@ function VE.UI.Tabs:CreateActivity(parent)
         for _, t in ipairs(tasks) do
             if t.id then repeatableLookup[t.id] = t.isRepeatable end
         end
-        -- Build CSV string
-        local csv = "Player,Task,XP,Time,Repeatable\n"
+        -- Build CSV string with all available API fields (matches Blizzard API names)
+        local csv = "playerName,taskName,taskID,amount,completionTime,timestamp,Repeatable\n"
         for _, entry in ipairs(activityData.taskActivity) do
             local player = entry.playerName or "Unknown"
             local task = entry.taskName or "Unknown"
+            local taskID = entry.taskID or 0
             local xp = entry.amount or 0
+            local timestamp = entry.completionTime or 0
             local timeStr = ""
-            if entry.completionTime and entry.completionTime > 0 then
-                timeStr = date("%Y-%m-%d %H:%M:%S", entry.completionTime)
+            if timestamp > 0 then
+                timeStr = date("%Y-%m-%d %H:%M:%S", timestamp)
             end
             -- Escape commas in task names
             task = task:gsub(",", ";")
             local repeatable = repeatableLookup[entry.taskID] and "Yes" or "No"
-            csv = csv .. string.format("%s,%s,%.3f,%s,%s\n", player, task, xp, timeStr, repeatable)
+            csv = csv .. string.format("%s,%s,%d,%.3f,%s,%d,%s\n", player, task, taskID, xp, timeStr, timestamp, repeatable)
         end
         -- Show in popup window
         VE.UI:ShowCSVExportWindow(csv, #activityData.taskActivity)

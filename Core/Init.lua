@@ -696,6 +696,48 @@ SlashCmdList["VE"] = function(msg)
                 end
             end
         end
+    elseif command == "validate" then
+        -- Show learned XP formula values vs config defaults
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:ValidateFormulaConfig()
+        else
+            print("|cFFdc322f[VE]|r EndeavorTracker not loaded")
+        end
+    elseif command == "rules" then
+        -- Show per-task learned decay rules (new simplified system)
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:ShowTaskRules(msg:match("^%S+%s+(.+)"))
+        else
+            print("|cFFdc322f[VE]|r EndeavorTracker not loaded")
+        end
+    elseif command == "relearn" then
+        -- Rebuild task rules from activity log
+        if VE.EndeavorTracker then
+            print("|cFF2aa198[VE]|r Rebuilding task rules from activity log...")
+            VE.EndeavorTracker:ResetTaskRules()
+            VE.EndeavorTracker:BuildTaskRulesFromLog()
+            -- Show summary
+            local tracker = VE.EndeavorTracker
+            local ruleCount = 0
+            local atFloorCount = 0
+            if tracker.taskRules then
+                for _, rules in pairs(tracker.taskRules) do
+                    ruleCount = ruleCount + 1
+                    if rules.atFloor then atFloorCount = atFloorCount + 1 end
+                end
+            end
+            print(string.format("|cFF2aa198[VE]|r Learned %d task rules (%d at floor)", ruleCount, atFloorCount))
+            print("|cFF2aa198[VE]|r Use '/ve rules' to see details")
+        else
+            print("|cFFdc322f[VE]|r EndeavorTracker not loaded")
+        end
+    elseif command == "dumplog" then
+        -- Dump all activity log fields to discover API structure
+        if VE.EndeavorTracker then
+            VE.EndeavorTracker:DumpActivityLogFields()
+        else
+            print("|cFFdc322f[VE]|r EndeavorTracker not loaded")
+        end
     else
         print("|cFF2aa198[VE]|r Commands:")
         print("  /ve - Toggle window")
@@ -714,5 +756,10 @@ SlashCmdList["VE"] = function(msg)
         print("  /ve initiatives - List discovered initiative types")
         print("  /ve roster - Request roster data (shows in window)")
         print("  /ve apis - List all housing APIs (shows in window)")
+        print("  /ve validate - Show learned XP formula values")
+        print("  /ve rules - Show per-task decay rules (new system)")
+        print("  /ve rules [taskname] - Show rules for specific task")
+        print("  /ve relearn - Rebuild task rules from activity log")
+        print("  /ve dumplog - Dump activity log API fields")
     end
 end

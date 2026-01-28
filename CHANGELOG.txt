@@ -2,6 +2,116 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.3 (Released January 2026)
+--------------------------------------------------------------------------------
+
+SIMPLIFIED XP FORMULA:
+- Formula reduced to: nextXP = progressContributionAmount × scale
+- API already handles decay (progressContributionAmount changes: 50→40→25→20)
+- Scale derived from floor tasks: scale = floorXP / progressContrib
+- Each house derives its own scale from its activity log
+
+REMOVED (~160 lines):
+- LearnRelativeScales() - decay is in API, not needed
+- GetRelativeScale() - not needed
+- ShowRelativeScales() - not needed
+- /ve scales command - removed
+
+BUG FIXES:
+- Fixed scale not clearing when switching houses via dropdown
+- Scale cache and taskRules now reset on house switch
+- House 1 (~0.037 scale) and House 2 (~0.029 scale) now calculate correctly
+
+--------------------------------------------------------------------------------
+
+Version 1.6.2 (Released January 2026)
+--------------------------------------------------------------------------------
+
+ARCHITECTURE:
+- Ultra-minimal config: Only ONE hardcoded value (COMPLETIONS_TO_FLOOR = 5)
+- All other values derived from API or activity log observations
+- Base XP comes ONLY from API progressContributionAmount (no fallback defaults)
+- Decay rate and floor% derived mathematically from COMPLETIONS_TO_FLOOR
+
+SIMPLIFIED:
+- LearnTaskRules() now only observes: atFloor, floorXP, scale
+- Removed learned values: decayRate, floor%, firstRunXP (all derived now)
+- GetTaskInfo() simplified: returns only { base } from API
+- Removed TASK_DATA pattern matching table (~40 lines)
+- Removed legacy config: DECAY table, MULTIPLIERS table, legacy aliases
+
+REMOVED FROM CONSTANTS:
+- VE.Constants.XP_FORMULA.DECAY (standard, accelerated, raidboss, onetime)
+- VE.Constants.XP_FORMULA.MULTIPLIERS (standard, raidboss, profession)
+- VE.Constants.ROSTER_SCALE, VE.Constants.TASK_MULTIPLIERS aliases
+
+BUG FIXES:
+- Fixed incorrect firstRunXP calculation (was back-calculating from unknown floor%)
+- "Find Treasures from Sealed Scrolls" no longer shows inflated 3.096 firstRunXP
+- "Home: Complete Weekly Neighborhood Quests" no longer shows 24% decay
+
+--------------------------------------------------------------------------------
+
+Version 1.6.1 (Released January 2026)
+--------------------------------------------------------------------------------
+
+NEW FEATURES:
+- Per-task decay learning: Each task now learns its own decay rate and floor
+  - More accurate than previous decay-type clustering approach
+  - Works backwards from most recent activity log entries (freshest data)
+  - Detects "flat_drop" pattern for raid bosses (100% → 0%)
+- New /ve rules command: Shows learned decay rules per task
+  - /ve rules - Show all learned task rules
+  - /ve rules [taskname] - Filter by task name
+
+TECHNICAL:
+- Simplified decay system architecture:
+  - taskRules storage: Per-task { decayRate, floor, atFloor, floorXP }
+  - BuildTaskRulesFromLog(): Analyzes last 2 completions per player per task
+  - LearnTaskRules(): Learns from consecutive XP values
+  - GetTaskDecayMultiplier(): Returns multiplier using per-task rules
+  - CalculateDecayMultiplier() now tries per-task rules first, falls back to config
+- Prediction formula verified: actualXP = baseXP × rosterScale × decayMultiplier
+  - Cross-checked against API progressContributionAmount (baseXP)
+  - Confirmed decay=20%, floor=20% for standard tasks
+- Floor data now preserved (not overwritten by decay-derived calculations)
+
+--------------------------------------------------------------------------------
+
+Version 1.6.0 (Released January 2026)
+--------------------------------------------------------------------------------
+
+BUG FIXES:
+- Fixed floor calculation returning 0.09 instead of 0.20 when roster size changed
+  - Root cause: Activity log spanned a 10x scale change (roster grew from small to large)
+  - Algorithm was mixing data from different scale periods, causing incorrect normalization
+  - Fix: Added scale period detection to normalize historical data to current scale
+- Fixed inactive house being viewed on login instead of active endeavor house
+  - Now prioritizes active neighborhood over saved selection on login
+  - User's manual dropdown selections during a session are still respected
+
+TECHNICAL:
+- Added DetectScalePeriods() to identify roster scale changes over time
+- Added GetScalePeriodForEntry() to map entries to their scale period
+- Updated LearnDecayFromActivity() with scale normalization before clustering
+- House selection on login checks if saved selection matches active neighborhood
+
+--------------------------------------------------------------------------------
+
+Version 1.5.9 (Released January 2026)
+--------------------------------------------------------------------------------
+
+TECHNICAL:
+- Refactored decay system: Consolidated duplicate code into single source of truth
+  - TASK_DATA table now holds base XP, decay type, and multiplier per task
+  - GetTaskInfo() returns { base, decay, multiplier } for any task
+  - CalculateDecayMultiplier() handles all decay types: onetime, accelerated, standard, raidboss
+  - Removed redundant functions: GetTaskMultiplier, GetTaskBaseValue, IsRaidBossTask, IsOneTimeTask, CalculateDRMultiplier
+  - Removed duplicate local TASK_BASE_VALUES table
+- CalculateNextContribution() now uses unified decay system (reduced from 8 to 4 lines)
+
+--------------------------------------------------------------------------------
+
 Version 1.5.8 (Released January 2026)
 --------------------------------------------------------------------------------
 
@@ -32,6 +142,8 @@ NEW FEATURES:
   - Raid Boss DR: Step-down (100% for N≤2, 50% for N=3-5, 0% for N≥6)
 
 UI IMPROVEMENTS:
+- House dropdown menu auto-sizes to fit long house names
+- Task tooltip: Renamed "Base XP" to "Current House XP reward" for clarity
 - XP text now uses theme's success color (green) for all themes
 - ThemeEngine respects warning state when applying colors
 

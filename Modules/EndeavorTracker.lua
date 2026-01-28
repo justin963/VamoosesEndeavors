@@ -1053,134 +1053,6 @@ function Tracker:GetRosterSize()
     return rosterSize
 end
 
-function Tracker:LearnRelativeScales()
-    local logInfo = self:GetActivityLogData()
-    if not logInfo or not logInfo.taskActivity then return {}, 0 end
-
-    -- 1. Sort Chronologically
-    local sorted = {}
-    for _, entry in ipairs(logInfo.taskActivity) do table.insert(sorted, entry) end
-    table.sort(sorted, function(a, b) return (a.completionTime or 0) < (b.completionTime or 0) end)
-
-    -- 2. Build Candidates
-    local uniqueChars = {}
-    local currentRosterSize = 0
-    local charTaskHistory = {}
-    local candidates = {}
-
-    for _, entry in ipairs(sorted) do
-        local char = entry.playerName
-        local task = entry.taskName
-        local xp = entry.amount
-
-        if char and task and xp and xp > 0.01 then
-            if not uniqueChars[char] then
-                uniqueChars[char] = true
-                currentRosterSize = currentRosterSize + 1
-            end
-
-            -- Capture all first-seen runs for this char/task combo
-            charTaskHistory[char] = charTaskHistory[char] or {}
-            if not charTaskHistory[char][task] then
-                charTaskHistory[char][task] = true
-                table.insert(candidates, {
-                    task = task,
-                    xp = xp,
-                    roster = currentRosterSize
-                })
-            end
-        end
-    end
-
-    -- 3. Establish Tier 1 Anchors
-    local taskBaselines = {}
-    for _, data in ipairs(candidates) do
-        -- Strict Anchor: Baseline must come from Roster 1 or 2
-        if data.roster <= 2 then
-            if not taskBaselines[data.task] or data.xp > taskBaselines[data.task] then
-                taskBaselines[data.task] = data.xp
-            end
-        end
-    end
-
-    -- 4. Calculate Raw High-Watermarks
-    -- This captures the "Best Case" for each roster size, but still includes decay pits.
-    local rawMaxScales = {}
-    for _, data in ipairs(candidates) do
-        local baseline = taskBaselines[data.task]
-        if baseline then
-            local ratio = data.xp / baseline
-            if ratio <= 1.1 then -- Filter obvious bugs only
-                local current = rawMaxScales[data.roster] or 0
-                if ratio > current then
-                    rawMaxScales[data.roster] = ratio
-                end
-            end
-        end
-    end
-
-    -- 5. The Reverse Envelope (First Principles Fix)
-    -- We enforce the invariant: Reward[N-1] >= Reward[N].
-    -- We iterate backwards. If we see a "pit" (low value followed by high value),
-    -- we pull the high value backwards to fill the pit.
-
-    local finalScales = {}
-    local futureSupport = 0 -- The highest sustainable floor seen in the future
-
-    for i = currentRosterSize, 1, -1 do
-        local raw = rawMaxScales[i] or 0
-
-        -- The true scale is at least the Raw value we observed...
-        -- BUT it must also be at least as high as what we observed for N+1.
-        local corrected = math.max(raw, futureSupport)
-
-        finalScales[i] = tonumber(string.format("%.3f", corrected))
-
-        -- Carry this support level backwards to Roster i-1
-        futureSupport = corrected
-    end
-
-    -- 6. Safety Fill (Start of Array)
-    -- If Roster 1/2 had no data (unlikely), ensure they default to 1.0 or next known
-    if (finalScales[1] or 0) == 0 then finalScales[1] = 1.0 end
-
-    -- Forward pass: Fill zeros AND cap suspicious drops
-    -- Scale CAPS at ~92.5%, so any drop > 10% from previous is contaminated
-    local lastVal = 1.0
-    for i = 1, currentRosterSize do
-        local current = finalScales[i] or 0
-        if current == 0 then
-            -- No data: inherit from previous
-            finalScales[i] = lastVal
-        elseif current < lastVal * 0.85 then
-            -- Drop > 15% is contaminated (decay pit): inherit from previous
-            finalScales[i] = lastVal
-        end
-        lastVal = finalScales[i]
-    end
-
-    return finalScales, currentRosterSize
-end
-
--- Get the relative scale for current roster size
-function Tracker:GetRelativeScale()
-    local learnedScales, currentRoster = self:LearnRelativeScales()
-
-    -- Find exact match or nearest lower
-    if learnedScales[currentRoster] then
-        return learnedScales[currentRoster], currentRoster
-    end
-
-    local nearest = nil
-    for size in pairs(learnedScales) do
-        if size <= currentRoster and (not nearest or size > nearest) then
-            nearest = size
-        end
-    end
-
-    return nearest and learnedScales[nearest] or 1.0, currentRoster
-end
-
 -- Reset learned task rules (triggers re-learning from activity log)
 function Tracker:ResetTaskRules()
     self.taskRules = {}
@@ -1317,9 +1189,9 @@ end
 function Tracker:ShowTaskRules(filterTask)
     print("|cFF2aa198[VE TaskRules]|r === Per-Task Rules ===")
 
-    local relativeScale, rosterSize = self:GetRelativeScale()
-    print(string.format("  Relative scale: |cFF268bd2%.3f|r (%.1f%%) | Roster: %d chars",
-        relativeScale, relativeScale * 100, rosterSize))
+    local scale = self:GetAbsoluteScale()
+    local rosterSize = self:GetRosterSize()
+    print(string.format("  Scale: |cFF268bd2%.5f|r | Roster: %d chars", scale, rosterSize))
 
     if not self.taskRules or not next(self.taskRules) then
         print("  No rules learned yet. Complete some tasks to learn rules.")
@@ -1361,65 +1233,51 @@ function Tracker:ShowTaskRules(filterTask)
     end
 end
 
--- Show learned relative scales (/ve scales command)
--- Only shows roster sizes where scale CHANGES (not every data point)
-function Tracker:ShowRelativeScales()
-    print("|cFF2aa198[VE Scale]|r === Learned Roster Scale ===")
-
-    local rosterSize = self:GetRosterSize()
-    local learnedScales, _ = self:LearnRelativeScales()
-    local currentScale, _ = self:GetRelativeScale()
-
-    print(string.format("  Roster: |cFF268bd2%d|r chars | Scale: |cFF859900%.3f|r (%.1f%%)",
-        rosterSize, currentScale, currentScale * 100))
-    print("  Method: High-watermark + Tier 1 Anchor")
-
-    if learnedScales and next(learnedScales) then
-        local sizes = {}
-        for size in pairs(learnedScales) do
-            table.insert(sizes, size)
-        end
-        table.sort(sizes)
-
-        -- Only show entries where scale changes (threshold: 0.01)
-        local lastScale = nil
-        for _, size in ipairs(sizes) do
-            local scale = learnedScales[size]
-            if not lastScale or math.abs(scale - lastScale) > 0.01 then
-                local marker = (size == rosterSize) and " |cFFb58900<--|r" or ""
-                print(string.format("    [%2d]: |cFF859900%.3f|r%s", size, scale, marker))
-                lastScale = scale
-            end
-        end
-
-        -- Show if scale has capped
-        local minScale = 1.0
-        for _, scale in pairs(learnedScales) do
-            if scale < minScale then minScale = scale end
-        end
-        if minScale < 1.0 and minScale > 0.9 then
-            print(string.format("  Scale CAPS at: |cFFcb4b16%.1f%%|r of baseline", minScale * 100))
-        end
-    else
-        print("  No scale data (need tasks with Tier 1 baseline at roster 1-2)")
-    end
-end
-
 -- Refresh learned values (call on activity log update)
 function Tracker:RefreshLearnedValues()
     self:BuildTaskRulesFromLog()
-    -- Scale is now learned via LearnRelativeScales() on demand
+    -- Clear cached scale so it re-derives from fresh floor data
+    self.cachedAbsoluteScale = nil
+end
+
+-- Derive scale from floor task observations
+-- Formula: scale = floorXP / progressContributionAmount
+-- Both values are at floor decay level, so they align perfectly
+function Tracker:GetAbsoluteScale()
+    if self.cachedAbsoluteScale then
+        return self.cachedAbsoluteScale
+    end
+
+    local tasks = VE.Store:GetState().tasks or {}
+
+    -- Find any floor task with observed floorXP
+    for _, task in ipairs(tasks) do
+        if (task.timesCompleted or 0) >= COMPLETIONS_TO_FLOOR then
+            local rules = self.taskRules and self.taskRules[task.name]
+            if rules and rules.floorXP and rules.floorXP > 0 then
+                local apiContrib = task.progressContributionAmount or 0
+                if apiContrib > 0 then
+                    self.cachedAbsoluteScale = rules.floorXP / apiContrib
+                    return self.cachedAbsoluteScale
+                end
+            end
+        end
+    end
+
+    -- Cold start fallback: tier 1 baseline (~0.04), will self-correct once floor data exists
+    return 0.04
 end
 
 
--- Debug command: show learned values
+-- Debug command: show learned values (/ve validate)
 function Tracker:ValidateFormulaConfig()
-    print("|cFF2aa198[VE Validate]|r === Formula Status ===")
+    print("|cFF2aa198[VE Validate]|r === XP Formula ===")
 
-    -- Scale (learned from activity log via LearnRelativeScales)
-    local relativeScale, rosterSize = self:GetRelativeScale()
-    print(string.format("  Relative scale: %.3f (%.1f%%) | Roster: %d chars",
-        relativeScale or 1, (relativeScale or 1) * 100, rosterSize or 0))
+    -- Scale derived from floor tasks
+    local scale = self:GetAbsoluteScale()
+    local isLearned = self.cachedAbsoluteScale ~= nil
+    local source = isLearned and "|cFF859900(from floor task)|r" or "|cFFcb4b16(fallback)|r"
+    print(string.format("  Scale: |cFF268bd2%.5f|r %s", scale, source))
 
     -- Per-task rules summary
     local ruleCount = 0
@@ -1430,10 +1288,60 @@ function Tracker:ValidateFormulaConfig()
             if rules.atFloor then atFloorCount = atFloorCount + 1 end
         end
     end
-    print(string.format("  Task rules: %d learned (%d at floor)", ruleCount, atFloorCount))
-    print("  Use '/ve rules' to see per-task decay rules")
+    print(string.format("  Tasks: %d learned, %d at floor", ruleCount, atFloorCount))
+
+    -- Formula explanation
+    print("  Formula: nextXP = progressContrib × scale")
+    print("  Use '/ve rules' for per-task details")
 
     print("|cFF2aa198[VE Validate]|r === End ===")
+end
+
+-- Debug: Dump all fields from activity log entries (/ve dumplog)
+function Tracker:DumpActivityLogFields()
+    local logInfo = self:GetActivityLogData()
+    if not logInfo then
+        print("|cFF2aa198[VE DumpLog]|r No activity log data available")
+        return
+    end
+
+    print("|cFF2aa198[VE DumpLog]|r === Activity Log Structure ===")
+
+    -- Dump top-level logInfo fields
+    print("  |cFF268bd2Top-level logInfo fields:|r")
+    for key, value in pairs(logInfo) do
+        local valType = type(value)
+        if valType == "table" then
+            print(string.format("    %s = [table with %d entries]", key, #value > 0 and #value or 0))
+        else
+            print(string.format("    %s = %s (%s)", key, tostring(value), valType))
+        end
+    end
+
+    -- Dump first entry's fields
+    if logInfo.taskActivity and #logInfo.taskActivity > 0 then
+        local entry = logInfo.taskActivity[1]
+        print("  |cFF268bd2Entry fields (from first entry):|r")
+        local fields = {}
+        for key in pairs(entry) do
+            table.insert(fields, key)
+        end
+        table.sort(fields)
+        for _, key in ipairs(fields) do
+            local value = entry[key]
+            local valType = type(value)
+            if valType == "table" then
+                print(string.format("    %s = [table]", key))
+            else
+                print(string.format("    %s = %s (%s)", key, tostring(value), valType))
+            end
+        end
+        print(string.format("  |cFF859900Total entries: %d|r", #logInfo.taskActivity))
+    else
+        print("  No taskActivity entries found")
+    end
+
+    print("|cFF2aa198[VE DumpLog]|r === End ===")
 end
 
 -- Look up task object from current initiative by name
@@ -1509,7 +1417,9 @@ function Tracker:GetDecayMultiplier(run)
     return math.max(floorPct, 1 - decayRate * (run - 1))
 end
 
--- Calculate next contribution using roster scale (for rankings/tooltips)
+-- Calculate next contribution using absolute scale (for rankings/tooltips)
+-- Formula: NextContribution = progressContributionAmount × AbsoluteScale
+-- progressContributionAmount is ALREADY DECAYED (changes with completions: 25→20→etc)
 function Tracker:CalculateNextContribution(taskName, _completions)
     local task = self:GetTaskByName(taskName)
     if not task then return 0 end
@@ -1517,7 +1427,7 @@ function Tracker:CalculateNextContribution(taskName, _completions)
     local timesCompleted = task.timesCompleted or 0
     local isAtFloor = timesCompleted >= COMPLETIONS_TO_FLOOR
 
-    -- If at floor and we have observed floor XP, use it directly (most accurate)
+    -- At floor: use observed floor XP directly (already has scale baked in)
     if isAtFloor then
         local rules = self.taskRules and self.taskRules[taskName]
         if rules and rules.floorXP and rules.floorXP > 0 then
@@ -1525,10 +1435,10 @@ function Tracker:CalculateNextContribution(taskName, _completions)
         end
     end
 
-    -- Otherwise use API's progressContributionAmount (already decay-adjusted)
-    -- This is the raw contribution - caller should apply relative scale if needed
-    local currentContribution = task.progressContributionAmount or 0
-    return currentContribution
+    -- progressContributionAmount already has decay - just apply scale
+    local apiContrib = task.progressContributionAmount or 0
+    local absoluteScale = self:GetAbsoluteScale()
+    return apiContrib * absoluteScale
 end
 
 -- Calculate floor XP for a task (what you'd earn at floor)
@@ -1679,6 +1589,8 @@ function Tracker:SelectHouse(index)
     -- Clear old data immediately when switching houses
     VE.Store:Dispatch("SET_TASKS", { tasks = {} })
     self.activityLogLoaded = false
+    self.cachedAbsoluteScale = nil  -- Clear scale cache - each house has different roster size
+    self.taskRules = {}             -- Clear task rules - will rebuild from new house's activity log
     VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = nil })
 
     -- Update house GUID and request fresh level data for the selected house

@@ -836,7 +836,7 @@ function VE.UI:CreateTaskRow(parent, options)
             end
             -- Show base endeavor XP
             if self.task.points and self.task.points > 0 then
-                GameTooltip:AddLine(string.format("Base XP: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
+                GameTooltip:AddLine(string.format("Current House XP reward: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
             end
             -- Show coupon reward info
             if self.task.couponReward and self.task.couponReward > 0 then
@@ -986,6 +986,19 @@ function VE.UI:CreateDropdown(parent, options)
             yOffset = yOffset - itemHeight
         end
 
+        -- Calculate menu width to fit longest item
+        local maxTextWidth = width - 4 -- minimum = container width minus borders
+        for _, item in ipairs(self.menuItems) do
+            local textWidth = item.text:GetStringWidth() + 16 -- padding for text
+            if textWidth > maxTextWidth then
+                maxTextWidth = textWidth
+            end
+        end
+
+        -- Clear right anchor and set explicit width for menu
+        self.menu:ClearAllPoints()
+        self.menu:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -1)
+        self.menu:SetWidth(maxTextWidth)
         self.menu:SetHeight(math.abs(yOffset) + 4)
     end
 

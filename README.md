@@ -6,12 +6,12 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.5.8 - Next Best Endeavor Prediction**
+## **What's New in v1.6.3 - Improved XP Predictions**
 
-- **Predicted XP with Diminishing Returns** - Full DR formula calculates your actual next XP reward
-- **Best Task Highlighting** - Gold/silver/bronze tints show top 3 tasks by predicted XP
-- **Sort by Next XP** - Order tasks by best reward, accounting for roster scale and completions
-- **Zero XP Warning** - Red highlight warns when tasks give no XP due to DR or completion cap
+- **Accurate Multi-House Support** - Each house now calculates its own XP scale from activity data
+- **Simplified Formula** - Predictions now use API-provided decay values for perfect accuracy
+- **Best Next Endeavor** - Gold/silver/bronze highlighting shows top 3 tasks by predicted XP
+- **House Switching Fixed** - XP predictions now correctly update when switching houses
 
 *See CHANGELOG.txt for complete version history*
 
@@ -138,5 +138,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.5.8
+**Version:** 1.6.3
 **Game Version:** 12.0.0+ (Midnight)
