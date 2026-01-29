@@ -322,6 +322,23 @@ function VE:CreateMainWindow()
     contribIcon:SetAtlas("housing-dashboard-fillbar-pip-complete")
     frame.contribIcon = contribIcon
 
+    -- Tooltip hover area for contribution
+    local contribHover = CreateFrame("Frame", nil, statsRow)
+    contribHover:SetPoint("LEFT", contribIcon, "LEFT", -2, 0)
+    contribHover:SetPoint("RIGHT", xpValue, "RIGHT", 2, 0)
+    contribHover:SetPoint("TOP", contribIcon, "TOP", 0, 2)
+    contribHover:SetPoint("BOTTOM", contribIcon, "BOTTOM", 0, -2)
+    contribHover:EnableMouse(true)
+    contribHover:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Neighborhood Contribution", 1, 1, 1)
+        GameTooltip:AddLine("Your contribution to the neighborhood initiative (this character).", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+    contribHover:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
     -- House XP text
     local houseXpText = statsRow:CreateFontString(nil, "OVERLAY")
     houseXpText:SetPoint("RIGHT", contribIcon, "LEFT", -12, 0)
@@ -349,19 +366,34 @@ function VE:CreateMainWindow()
     houseXpHover:SetScript("OnEnter", function(self)
         local colors = VE.Constants:GetThemeColors()
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine("This is a guess!", colors.accent.r, colors.accent.g, colors.accent.b)
-        GameTooltip:AddLine(" ")
         GameTooltip:AddLine("House XP Earned", 1, 1, 1)
-        GameTooltip:AddLine("Estimated total from completed tasks.", 0.7, 0.7, 0.7, true)
-        if frame.houseXpCapped then
+        GameTooltip:AddLine("Total from activity log (all your chars).", 0.7, 0.7, 0.7, true)
+
+        local bd = frame.houseXpBreakdown
+        if bd then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("You may be capped!", colors.warning.r, colors.warning.g, colors.warning.b)
-            GameTooltip:AddLine("XP gains stop after ~1000 per week.", 0.7, 0.7, 0.7, true)
+            -- Pre cap increase (capped at 1000)
+            local preColor = bd.preCapped >= bd.preCap and colors.text_dim or colors.endeavor
+            GameTooltip:AddDoubleLine(
+                "Pre cap increase:",
+                string.format("%.0f / %d", bd.preCapped, bd.preCap),
+                0.7, 0.7, 0.7,
+                preColor.r, preColor.g, preColor.b
+            )
+            -- Post cap increase (capped at 2250)
+            local postColor = bd.post >= bd.postCap and colors.text_dim or colors.endeavor
+            GameTooltip:AddDoubleLine(
+                "Post cap increase:",
+                string.format("%.0f / %d", bd.post, bd.postCap),
+                0.7, 0.7, 0.7,
+                postColor.r, postColor.g, postColor.b
+            )
+
+            if frame.houseXpCapped then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Weekly cap reached!", colors.warning.r, colors.warning.g, colors.warning.b)
+            end
         end
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Standard Decay: -20% per run (floor 20%)", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Base 50: 50 -> 40 -> 30 -> 20 -> 10", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Accelerated: -25% per run (floor 25%)", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     houseXpHover:SetScript("OnLeave", function()
@@ -530,23 +562,24 @@ function VE:CreateMainWindow()
         -- Contribution = endeavor progress (from activity log)
         self.xpValue:SetText(string.format("%.1f", playerContribution))
 
-        -- House XP = reward from completed tasks (with DR calculation)
-        local houseXpEarned = 0
-        if state.tasks and VE.EndeavorTracker then
-            for _, task in ipairs(state.tasks) do
-                houseXpEarned = houseXpEarned + VE.EndeavorTracker:GetTaskTotalHouseXPEarned(task)
-            end
+        -- House XP = total XP earned from all activity log entries
+        local houseXpEarned, breakdown = 0, nil
+        if VE.EndeavorTracker then
+            houseXpEarned, breakdown = VE.EndeavorTracker:GetTotalHouseXPEarned()
         end
-        self.houseXpText:SetText(tostring(houseXpEarned))
-        -- Grey out if potentially capped (>1000 XP)
+        self.houseXpText:SetText(string.format("%.1f", houseXpEarned))
+        self.houseXpBreakdown = breakdown  -- Store for tooltip
+
+        -- Grey out only if post-Jan29 XP has hit the weekly cap (2250)
         local colors = VE.Constants:GetThemeColors()
-        if houseXpEarned > 1000 then
+        local postCapped = breakdown and breakdown.post >= breakdown.postCap
+        if postCapped then
             self.houseXpText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            self.houseXpText._colorType = "text_dim"  -- Update for theme engine
+            self.houseXpText._colorType = "text_dim"
             self.houseXpCapped = true
         else
             self.houseXpText:SetTextColor(colors.endeavor.r, colors.endeavor.g, colors.endeavor.b)
-            self.houseXpText._colorType = "endeavor"  -- Update for theme engine
+            self.houseXpText._colorType = "endeavor"
             self.houseXpCapped = false
         end
     end

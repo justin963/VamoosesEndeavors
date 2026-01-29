@@ -8,10 +8,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.7 - Code Simplification**
+## **What's New in v1.6.8 - House XP Tracking**
 
-- **Simplified floor XP learning** - Now uses most recent activity log entry
-- **More reliable** - Trusts API timesCompleted to determine floor status
+- **Accurate House XP calculation** - Dynamic scale, two-period cap system (1000 pre/2250 post)
+- **House XP tooltip breakdown** - Shows pre/post cap increase earnings with colored progress
+- **Coupon display fix** - Auto-retries if quest API isn't ready at login
 
 *See CHANGELOG.txt for complete version history*
 
@@ -131,5 +132,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.7
+**Version:** 1.6.8
 **Game Version:** 12.0.0+ (Midnight)

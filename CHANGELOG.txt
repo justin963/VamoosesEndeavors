@@ -2,6 +2,29 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.8 (Released January 2026)
+--------------------------------------------------------------------------------
+
+HOUSE XP CALCULATION:
+- Dynamic scale: Uses live API scale for post-hotfix (no hardcoded fallback)
+- Two-period cap system:
+  - Pre cap increase: 1000 XP cap (historical, won't change)
+  - Post cap increase: 2250 XP weekly cap
+- Non-repeatable tasks use fixed XP values:
+  - Kill a Profession Rare: 150 XP (2x multiplier)
+  - Daily Quests: 50 XP
+  - Champion a Faction Envoy: 10 XP
+- House XP tooltip shows breakdown of pre/post cap increase earnings
+
+UI IMPROVEMENTS:
+- House XP display only dims when weekly cap (2250) is reached
+- Contribution display now has tooltip: "Neighborhood Contribution (this character)"
+
+BUG FIXES:
+- Coupon column now auto-retries if quest API isn't ready at login
+
+--------------------------------------------------------------------------------
+
 Version 1.6.7 (Released January 2026)
 --------------------------------------------------------------------------------
 

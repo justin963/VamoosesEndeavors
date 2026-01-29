@@ -557,12 +557,18 @@ function Tracker:ProcessInitiativeInfo(info)
 
     -- Process tasks
     local tasks = {}
+    local hasMissingCoupons = false
     if info.tasks then
         for _, task in ipairs(info.tasks) do
             -- Skip subtasks (superseded tasks) - they're children of other tasks
             if not task.supersedes or task.supersedes == 0 then
                 -- taskType: 0=Single, 1=RepeatableFinite, 2=RepeatableInfinite
                 local isRepeatable = task.taskType and task.taskType > 0
+                local couponReward = self:GetTaskCouponReward(task)
+                if couponReward == nil then
+                    hasMissingCoupons = true
+                    couponReward = 0  -- Default to 0 for display
+                end
                 table.insert(tasks, {
                     id = task.ID,
                     name = task.taskName,
@@ -579,7 +585,7 @@ function Tracker:ProcessInitiativeInfo(info)
                     timesCompleted = task.timesCompleted,
                     isRepeatable = isRepeatable,
                     rewardQuestID = task.rewardQuestID,
-                    couponReward = self:GetTaskCouponReward(task),
+                    couponReward = couponReward,
                 })
             end
         end
@@ -594,6 +600,15 @@ function Tracker:ProcessInitiativeInfo(info)
     end
 
     VE.Store:Dispatch("SET_TASKS", { tasks = tasks })
+
+    -- If coupon data wasn't ready, schedule a retry
+    if hasMissingCoupons and not self._couponRetryScheduled then
+        self._couponRetryScheduled = true
+        C_Timer.After(2, function()
+            self._couponRetryScheduled = false
+            self:ProcessEndeavorTasks()  -- Re-process to get coupon data
+        end)
+    end
 
     -- Save character progress
     self:SaveCurrentCharacterProgress()
@@ -648,18 +663,14 @@ function Tracker:GetTaskCouponReward(task)
                     return reward.totalRewardAmount or 0
                 end
             end
+            return 0  -- rewards loaded but no coupons found
         end
+        -- rewards is nil - API not ready yet
+        return nil
     end
 
     return 0
 end
-
--- House XP diminishing returns: Progressive DR that increases each completion
--- Formula: factor_n = 0.96 - 0.10 * n where n is completion number (2+)
--- Progression from base 50: 50 → 38 (×0.76) → 25 (×0.66) → 14 (×0.56) → 10 (floor)
--- Floor of 10 XP minimum per completion
-local HOUSE_XP_MIN_FLOOR = 10
-
 
 -- Debug dump of task XP data for analysis
 function Tracker:DumpTaskXPData()
@@ -668,50 +679,137 @@ function Tracker:DumpTaskXPData()
         print("|cFFdc322f[VE XP Dump]|r No tasks loaded")
         return
     end
-    print("|cFF2aa198[VE XP Dump]|r === Task XP Data ===")
+    print("|cFF2aa198[VE XP Dump]|r === Task XP Data (from activity log) ===")
     local totalEarned = 0
     for _, task in ipairs(state.tasks) do
-        local completions = task.timesCompleted or 0
-        if task.completed then completions = completions + 1 end
         local earned = self:GetTaskTotalHouseXPEarned(task)
-        local taskInfo = self:GetTaskInfo(task.name)
-        local base = taskInfo.base
         local repLabel = task.isRepeatable and "REP" or "ONE"
-        print(string.format("  [%s] %s: base=%d, current=%d, comps=%d, earned=%d",
+        print(string.format("  [%s] %s: apiContrib=%d, earned=%.1f",
             repLabel,
             task.name or "?",
-            base,
-            task.progressContributionAmount or task.points or 0,
-            completions,
+            task.progressContributionAmount or 0,
             earned))
         totalEarned = totalEarned + earned
     end
-    print("|cFF2aa198[VE XP Dump]|r Total earned: " .. totalEarned)
+    print("|cFF2aa198[VE XP Dump]|r Total earned: " .. string.format("%.1f", totalEarned))
     print("|cFF2aa198[VE XP Dump]|r === End ===")
 end
 
--- Calculate total house XP earned from task completions
+-- Scale constants for House XP calculation
+-- Blizzard changed the scale on Jan 29, 2026 (hotfix to address community feedback)
+-- Scale = baseScale / rosterSize, where baseScale changed from ~1.0 to ~2.325
+local SCALE_CHANGE_CUTOFF = 1769620000  -- ~Jan 28, 2026 17:00 UTC (hotfix deployed between 11:23 and 21:07 UTC)
+local OLD_SCALE = 0.04   -- Pre-Jan 29 scale (historical, won't change)
+local PRE_JAN29_CAP = 1000  -- Weekly cap before Jan 29 hotfix
+local POST_JAN29_CAP = 2250  -- Weekly cap after Jan 29 hotfix
+
+-- Non-repeatable tasks have fixed XP values (don't use scale calculation)
+local NON_REPEATABLE_XP = {
+    ["Kill a Profession Rare"] = 150,  -- 2x multiplier
+    ["Home: Complete Weekly Neighborhood Quests"] = 50,
+    ["Champion a Faction Envoy"] = 10,
+}
+
+-- Get scale that was active at a given time
+-- Pre-cutoff: hardcoded 0.04 (historical)
+-- Post-cutoff: dynamic from API via GetAbsoluteScale()
+function Tracker:GetScaleAtTime(_, targetTime)
+    if targetTime < SCALE_CHANGE_CUTOFF then
+        return OLD_SCALE
+    else
+        return self:GetAbsoluteScale()  -- Live from API
+    end
+end
+
+-- Calculate total house XP earned from activity log for a specific task
 function Tracker:GetTaskTotalHouseXPEarned(task)
-    local completions = task.timesCompleted or 0
-    if task.completed then
-        completions = completions + 1
-    end
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then return 0 end
 
-    if completions == 0 then
-        return 0
-    end
+    VE_DB = VE_DB or {}
+    local myChars = VE_DB.myCharacters or {}
 
-    local taskInfo = self:GetTaskInfo(task.name)
-    local base = taskInfo.base
-
-    -- Sum XP for each completion using decay multipliers
     local total = 0
-    for run = 1, completions do
-        local decayMult = self:GetDecayMultiplier(run)
-        total = total + (base * decayMult)
+    for _, entry in ipairs(logInfo.taskActivity) do
+        if entry.taskName == task.name and myChars[entry.playerName] then
+            -- Check for non-repeatable tasks with fixed XP
+            local fixedXP = NON_REPEATABLE_XP[entry.taskName]
+            local xp
+            if fixedXP then
+                xp = fixedXP
+            else
+                local contribution = entry.amount or 0
+                local entryTime = entry.completionTime or 0
+                local scale = self:GetScaleAtTime(nil, entryTime)
+                xp = (scale > 0) and (contribution / scale) or 0
+            end
+            total = total + xp
+        end
     end
 
-    return math.floor(total + 0.5)
+    return total
+end
+
+-- Calculate TOTAL house XP earned from activity log (account-wide, all tasks)
+-- Applies pre-Jan 29 cap (1000 XP) to combined pre-hotfix earnings
+-- Returns: total, breakdown table {preRaw, preCapped, post, preCap, postCap}
+function Tracker:GetTotalHouseXPEarned()
+    local logInfo = self:GetActivityLogData()
+    if not logInfo or not logInfo.taskActivity then
+        return 0, { preRaw = 0, preCapped = 0, post = 0, preCap = PRE_JAN29_CAP, postCap = POST_JAN29_CAP }
+    end
+
+    VE_DB = VE_DB or {}
+    local myChars = VE_DB.myCharacters or {}
+
+    local preJan29Total = 0
+    local postJan29Total = 0
+
+    for _, entry in ipairs(logInfo.taskActivity) do
+        if myChars[entry.playerName] then
+            local contribution = entry.amount or 0
+            local entryTime = entry.completionTime or 0
+
+            -- Check for non-repeatable tasks with fixed XP
+            local fixedXP = NON_REPEATABLE_XP[entry.taskName]
+            local xp
+            if fixedXP then
+                xp = fixedXP
+            else
+                local scale = self:GetScaleAtTime(nil, entryTime)
+                if scale > 0 then
+                    xp = contribution / scale
+                else
+                    xp = 0
+                end
+            end
+
+            if entryTime < SCALE_CHANGE_CUTOFF then
+                preJan29Total = preJan29Total + xp
+            else
+                postJan29Total = postJan29Total + xp
+            end
+        end
+    end
+
+    -- Apply caps to each period
+    local cappedPreJan29 = math.min(preJan29Total, PRE_JAN29_CAP)
+    local cappedPostJan29 = math.min(postJan29Total, POST_JAN29_CAP)
+
+    local breakdown = {
+        preRaw = preJan29Total,
+        preCapped = cappedPreJan29,
+        post = cappedPostJan29,
+        preCap = PRE_JAN29_CAP,
+        postCap = POST_JAN29_CAP,
+    }
+
+    return cappedPreJan29 + cappedPostJan29, breakdown
+end
+
+-- Clear cached scale timeline (call on house switch or relearn)
+function Tracker:ClearScaleTimelineCache()
+    self._scaleTimeline = nil
 end
 
 -- Refresh tracked tasks status
