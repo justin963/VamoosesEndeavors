@@ -2,6 +2,19 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.6.7 (Released January 2026)
+--------------------------------------------------------------------------------
+
+CODE SIMPLIFICATION:
+- Simplified floor XP learning system (~90 lines removed)
+  - Now uses most recent activity log entry for floor tasks
+  - Trusts API timesCompleted >= 5 to determine floor status
+  - Removed complex two-value floor detection algorithm
+  - Removed LearnTaskRules() function (archived to Utilities/)
+- Scale derivation remains accurate: floorXP / progressContributionAmount
+
+--------------------------------------------------------------------------------
+
 Version 1.6.6 (Released January 2026)
 --------------------------------------------------------------------------------
 

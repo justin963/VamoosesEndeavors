@@ -6,10 +6,11 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.6 - Tooltip Labels**
+## **What's New in v1.6.7 - Code Simplification**
 
-- **Next House XP** - Shows raw progressContributionAmount (what you receive)
-- **Next Endeavor Contribution** - Shows calculated neighborhood contribution
+- **Simplified floor XP learning** - Now uses most recent activity log entry
+- **Removed ~90 lines** of complex two-pass floor detection code
+- **More reliable** - Trusts API timesCompleted to determine floor status
 
 *See CHANGELOG.txt for complete version history*
 
@@ -136,5 +137,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.6
+**Version:** 1.6.7
 **Game Version:** 12.0.0+ (Midnight)

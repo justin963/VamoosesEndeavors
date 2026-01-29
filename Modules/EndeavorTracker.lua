@@ -1083,48 +1083,8 @@ end
 -- Each task learns its own decay rate and floor from observed completions
 -- ============================================================================
 
--- Learn rules for a specific task from two observed XP values
--- Only observes: atFloor, floorXP (observed), pattern. Scale is global.
--- observationTime: timestamp of the most recent observation (to prefer newer data)
-function Tracker:LearnTaskRules(taskName, last, prev, observationTime)
-    if not taskName or not last or not prev then return end
-
-    self.taskRules[taskName] = self.taskRules[taskName] or {}
-    local rules = self.taskRules[taskName]
-
-    -- Ensure prev >= last (prev is earlier = higher XP)
-    if last > prev then prev, last = last, prev end
-
-    if math.abs(last - prev) < 0.001 then
-        -- AT FLOOR: consecutive same values
-        -- Only update floorXP if this observation is more recent
-        if not rules.floorXPTime or (observationTime and observationTime > rules.floorXPTime) then
-            rules.atFloor = true
-            rules.floorXP = last
-            rules.floorXPTime = observationTime or time()
-        end
-
-    elseif prev > last then
-        -- DECAYING: not at floor yet
-        -- Detect raid boss pattern (value drops to 0)
-        if last < 0.01 and prev > 0.1 then
-            if not rules.floorXPTime or (observationTime and observationTime > rules.floorXPTime) then
-                rules.pattern = "raidboss"
-                rules.atFloor = true
-                rules.floorXP = 0
-                rules.floorXPTime = observationTime or time()
-            end
-        elseif not rules.atFloor then
-            rules.atFloor = false
-        end
-    end
-
-    rules.lastUpdated = time()
-    rules.dataPoints = (rules.dataPoints or 0) + 1
-end
-
--- Build task rules from activity log (works backwards from recent entries)
--- FRESH BUILD: Clears existing rules and rebuilds entirely from activity log
+-- Build task rules from activity log
+-- Simplified approach: for floor tasks (timesCompleted >= 5), use most recent entry as floor XP
 function Tracker:BuildTaskRulesFromLog()
     local logInfo = self:GetActivityLogData()
     if not logInfo or not logInfo.taskActivity then return end
@@ -1134,63 +1094,45 @@ function Tracker:BuildTaskRulesFromLog()
         print("|cFF2aa198[VE TaskRules]|r Building rules from activity log...")
     end
 
-    -- CRITICAL: Start fresh - no stale SavedVariables data
+    -- Start fresh
     self.taskRules = {}
 
-    -- Group by taskName + playerName, keeping only the 2 most recent per player
-    -- Structure: recentByTask[taskName][playerKey] = { last, lastTime, prev }
+    -- Group by taskName, keeping only the most recent entry
     local recentByTask = {}
-
     for _, entry in ipairs(logInfo.taskActivity) do
         local task = entry.taskName
-        local player = entry.playerName
         local amount = entry.amount
         local completionTime = entry.completionTime or 0
-
-        if task and player and amount then  -- Keep 0 values for raid boss pattern detection
-            local key = task .. "|" .. player
-            recentByTask[task] = recentByTask[task] or {}
-
-            if not recentByTask[task][key] then
-                -- First entry for this player+task
-                recentByTask[task][key] = {
-                    last = amount,
-                    lastTime = completionTime
-                }
-            elseif completionTime > recentByTask[task][key].lastTime then
-                -- Newer entry found - shift previous
-                recentByTask[task][key].prev = recentByTask[task][key].last
-                recentByTask[task][key].last = amount
-                recentByTask[task][key].lastTime = completionTime
-            elseif not recentByTask[task][key].prev then
-                -- Second entry for this player (older than last)
-                recentByTask[task][key].prev = amount
+        if task and amount and amount > 0 then
+            if not recentByTask[task] or completionTime > recentByTask[task].time then
+                recentByTask[task] = { amount = amount, time = completionTime }
             end
         end
     end
 
-    -- Analyze each task's recent completions
-    local rulesLearned = 0
-    for taskName, players in pairs(recentByTask) do
-        for _, data in pairs(players) do
-            if data.prev then
-                -- We have 2 data points - can learn rules (pass timestamp to prefer newer observations)
-                self:LearnTaskRules(taskName, data.last, data.prev, data.lastTime)
-                rulesLearned = rulesLearned + 1
+    -- For floor tasks (per API), use most recent entry as floor XP
+    local tasks = VE.Store:GetState().tasks or {}
+    local floorCount = 0
+    for _, task in ipairs(tasks) do
+        if (task.timesCompleted or 0) >= COMPLETIONS_TO_FLOOR then
+            local recent = recentByTask[task.name]
+            if recent then
+                self.taskRules[task.name] = {
+                    atFloor = true,
+                    floorXP = recent.amount,
+                    floorXPTime = recent.time,
+                }
+                floorCount = floorCount + 1
+                if debug then
+                    print(string.format("  %s: floorXP=%.3f", task.name, recent.amount))
+                end
             end
         end
     end
 
     if debug then
-        print("|cFF2aa198[VE TaskRules]|r Learned rules for " .. rulesLearned .. " task+player combinations")
-        for taskName, rules in pairs(self.taskRules) do
-            print(string.format("  %s: floorXP=%.3f%s",
-                taskName,
-                rules.floorXP or 0,
-                rules.atFloor and " (at floor)" or " (decaying)"))
-        end
+        print("|cFF2aa198[VE TaskRules]|r Learned floor XP for " .. floorCount .. " tasks")
     end
-    -- No SaveTaskRules() - we rebuild from activity log each time
 end
 
 -- Show per-task learned rules (/ve rules command)
