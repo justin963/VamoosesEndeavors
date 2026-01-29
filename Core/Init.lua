@@ -176,6 +176,9 @@ function VE:OnInitialize()
 end
 
 function VE:OnEnable()
+    -- Track session start time for coupon gain tracking
+    VE._sessionStart = time()
+
     -- Trigger addon enabled event
     VE.EventBus:Trigger("VE_ADDON_ENABLED")
 

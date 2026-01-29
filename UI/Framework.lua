@@ -838,10 +838,18 @@ function VE.UI:CreateTaskRow(parent, options)
             if self.task.points and self.task.points > 0 then
                 GameTooltip:AddLine(string.format("Current House XP reward: %.2f", self.task.points), c.endeavor.r, c.endeavor.g, c.endeavor.b)
             end
-            -- Show coupon reward info
+            -- Show coupon reward info (last tracked + base for comparison)
             if self.task.couponReward and self.task.couponReward > 0 then
-                local label = self.task.isRepeatable and "Base reward" or "Reward"
-                GameTooltip:AddLine(label .. ": +" .. self.task.couponReward .. " coupons", c.accent.r, c.accent.g, c.accent.b)
+                local actual = self.task.couponReward
+                local base = self.task.couponBase or actual
+                if actual ~= base then
+                    -- Show both last received and base when they differ
+                    GameTooltip:AddLine("Last received: +" .. actual .. " coupons", c.accent.r, c.accent.g, c.accent.b)
+                    GameTooltip:AddLine("Base reward: +" .. base .. " coupons", 0.5, 0.5, 0.5)
+                else
+                    local label = self.task.isRepeatable and "Base reward" or "Reward"
+                    GameTooltip:AddLine(label .. ": +" .. actual .. " coupons", c.accent.r, c.accent.g, c.accent.b)
+                end
             end
             -- Show times completed for repeatable tasks
             if self.task.isRepeatable and self.task.timesCompleted and self.task.timesCompleted > 0 then

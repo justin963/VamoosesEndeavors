@@ -75,6 +75,14 @@ function Tracker:Initialize()
         end
     end)
 
+    -- Listen for coupon gains to refresh task display with actual values
+    VE.EventBus:Register("VE_COUPON_GAINED", function(payload)
+        -- Always refresh to show updated values (even if correlation failed)
+        C_Timer.After(0.1, function()
+            VE.EndeavorTracker:FetchEndeavorData()
+        end)
+    end)
+
     -- Load previously learned formula values from SavedVariables
     self:LoadLearnedValues()
 
@@ -143,8 +151,27 @@ function Tracker:OnEvent(event, ...)
     elseif event == "INITIATIVE_TASK_COMPLETED" then
         local taskName = ...
         if debug then
-            print("|cFF2aa198[VE Tracker]|r Task completed: " .. tostring(taskName))
+            print("|cFF2aa198[VE Tracker]|r Task completed: |cFFFFD100" .. tostring(taskName) .. "|r")
         end
+        -- Look up task info from current state
+        local taskID, isRepeatable = nil, false
+        local state = VE.Store:GetState()
+        if state and state.tasks then
+            for _, task in ipairs(state.tasks) do
+                if task.name == taskName then
+                    taskID = task.id
+                    isRepeatable = task.isRepeatable or false
+                    break
+                end
+            end
+        end
+        -- Store pending task for coupon correlation (CURRENCY_DISPLAY_UPDATE fires after this)
+        VE._pendingTaskCompletion = {
+            taskName = taskName,
+            taskID = taskID,
+            isRepeatable = isRepeatable,
+            timestamp = time(),
+        }
         self:QueueDataRefresh()
 
     elseif event == "INITIATIVE_COMPLETED" then
@@ -564,10 +591,11 @@ function Tracker:ProcessInitiativeInfo(info)
             if not task.supersedes or task.supersedes == 0 then
                 -- taskType: 0=Single, 1=RepeatableFinite, 2=RepeatableInfinite
                 local isRepeatable = task.taskType and task.taskType > 0
-                local couponReward = self:GetTaskCouponReward(task)
+                local couponReward, couponBase = self:GetTaskCouponReward(task)
                 if couponReward == nil then
                     hasMissingCoupons = true
                     couponReward = 0  -- Default to 0 for display
+                    couponBase = 0
                 end
                 table.insert(tasks, {
                     id = task.ID,
@@ -585,7 +613,8 @@ function Tracker:ProcessInitiativeInfo(info)
                     timesCompleted = task.timesCompleted,
                     isRepeatable = isRepeatable,
                     rewardQuestID = task.rewardQuestID,
-                    couponReward = couponReward,
+                    couponReward = couponReward,  -- Actual (tracked) or base if no tracking
+                    couponBase = couponBase or couponReward,  -- Base reward for tooltip
                 })
             end
         end
@@ -606,7 +635,7 @@ function Tracker:ProcessInitiativeInfo(info)
         self._couponRetryScheduled = true
         C_Timer.After(2, function()
             self._couponRetryScheduled = false
-            self:ProcessEndeavorTasks()  -- Re-process to get coupon data
+            VE.EndeavorTracker:FetchEndeavorData()  -- Re-process to get coupon data
         end)
     end
 
@@ -644,32 +673,47 @@ function Tracker:GetTaskMax(task)
 end
 
 -- Get coupon reward amount from task's rewardQuestID
--- Formula: API returns base reward, actual reward = base - timesCompleted
+-- Returns: actual (or base if no tracking), base (for tooltip)
+-- actual comes from tracked CURRENCY_DISPLAY_UPDATE data
+-- base comes from quest reward API
 function Tracker:GetTaskCouponReward(task)
+    local taskName = task.taskName or task.name
+    local base = 0
+
     if not task.rewardQuestID or task.rewardQuestID == 0 then
-        return 0
+        return 0, 0
     end
 
-    -- Use C_QuestLog to get currency rewards for the quest
+    -- Get base reward from API
     if C_QuestLog and C_QuestLog.GetQuestRewardCurrencies then
         local rewards = C_QuestLog.GetQuestRewardCurrencies(task.rewardQuestID)
         if rewards then
             for _, reward in ipairs(rewards) do
-                -- Community Coupons currency
                 local couponID = VE.Constants and VE.Constants.CURRENCY_IDS and VE.Constants.CURRENCY_IDS.COMMUNITY_COUPONS or 3363
                 if reward.currencyID == couponID then
-                    -- Return API value directly - DR is server-side, not exposed in API
-                    -- This shows base reward; actual may be less for repeated completions
-                    return reward.totalRewardAmount or 0
+                    base = reward.totalRewardAmount or 0
+                    break
                 end
             end
-            return 0  -- rewards loaded but no coupons found
+        else
+            -- rewards is nil - API not ready yet
+            return nil, nil
         end
-        -- rewards is nil - API not ready yet
-        return nil
     end
 
-    return 0
+    -- Check for tracked actual reward (from CURRENCY_DISPLAY_UPDATE correlation)
+    -- History is stored as array: { {amount, timestamp, character}, ... }
+    -- Clear old format (single number) if found
+    VE_DB = VE_DB or {}
+    local history = VE_DB.taskActualCoupons and VE_DB.taskActualCoupons[taskName]
+    if history and type(history) ~= "table" then
+        VE_DB.taskActualCoupons[taskName] = nil  -- Clear old format
+        history = nil
+    end
+    local actual = history and #history > 0 and history[#history].amount
+
+    -- Return actual (or base if no tracking), and base for tooltip
+    return actual or base, base
 end
 
 -- Debug dump of task XP data for analysis
@@ -792,14 +836,17 @@ function Tracker:GetTotalHouseXPEarned()
         end
     end
 
-    -- Apply caps to each period
+    -- Apply caps:
+    -- Pre-Jan29: capped at 1000 (old cap, historical)
+    -- Post-Jan29: cumulative total (pre + post) capped at 2250
     local cappedPreJan29 = math.min(preJan29Total, PRE_JAN29_CAP)
-    local cappedPostJan29 = math.min(postJan29Total, POST_JAN29_CAP)
+    local remainingCap = POST_JAN29_CAP - cappedPreJan29  -- How much more can be earned
+    local cappedPostJan29 = math.min(postJan29Total, remainingCap)
 
     local breakdown = {
         preRaw = preJan29Total,
         preCapped = cappedPreJan29,
-        post = cappedPostJan29,
+        post = cappedPostJan29,  -- Post earnings (cumulative shown in tooltip)
         preCap = PRE_JAN29_CAP,
         postCap = POST_JAN29_CAP,
     }

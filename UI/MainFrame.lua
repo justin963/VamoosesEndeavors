@@ -380,11 +380,12 @@ function VE:CreateMainWindow()
                 0.7, 0.7, 0.7,
                 preColor.r, preColor.g, preColor.b
             )
-            -- Post cap increase (capped at 2250)
-            local postColor = bd.post >= bd.postCap and colors.text_dim or colors.endeavor
+            -- Post cap increase (cumulative total toward 2250 cap)
+            local cumulative = bd.preCapped + bd.post
+            local postColor = cumulative >= bd.postCap and colors.text_dim or colors.endeavor
             GameTooltip:AddDoubleLine(
                 "Post cap increase:",
-                string.format("%.0f / %d", bd.post, bd.postCap),
+                string.format("%.0f / %d", cumulative, bd.postCap),
                 0.7, 0.7, 0.7,
                 postColor.r, postColor.g, postColor.b
             )
@@ -570,9 +571,10 @@ function VE:CreateMainWindow()
         self.houseXpText:SetText(string.format("%.1f", houseXpEarned))
         self.houseXpBreakdown = breakdown  -- Store for tooltip
 
-        -- Grey out only if post-Jan29 XP has hit the weekly cap (2250)
+        -- Grey out only if cumulative XP has hit the weekly cap (2250)
         local colors = VE.Constants:GetThemeColors()
-        local postCapped = breakdown and breakdown.post >= breakdown.postCap
+        local cumulative = breakdown and (breakdown.preCapped + breakdown.post) or 0
+        local postCapped = cumulative >= (breakdown and breakdown.postCap or 2250)
         if postCapped then
             self.houseXpText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
             self.houseXpText._colorType = "text_dim"

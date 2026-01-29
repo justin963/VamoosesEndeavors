@@ -62,6 +62,12 @@ function Tracker:OnEvent(event, ...)
         self:RequestHouseInfo()
 
     elseif event == "CURRENCY_DISPLAY_UPDATE" then
+        local currencyType, quantity, quantityChange, gainSource = ...
+        -- Track actual coupon gains (post-DR amounts)
+        local COMMUNITY_COUPONS = VE.Constants and VE.Constants.CURRENCY_IDS and VE.Constants.CURRENCY_IDS.COMMUNITY_COUPONS or 3363
+        if currencyType == COMMUNITY_COUPONS and quantityChange and quantityChange > 0 then
+            self:TrackCouponGain(quantityChange, gainSource)
+        end
         -- Debounce currency updates (per CLAUDE.md Rule 9: 0.2-0.5s)
         if self.couponUpdateTimer then
             self.couponUpdateTimer:Cancel()
@@ -226,6 +232,81 @@ function Tracker:UpdateCoupons()
             iconID = currencyInfo.iconFileID,
         })
     end
+end
+
+-- Track actual coupon gains (post-DR amounts from CURRENCY_DISPLAY_UPDATE)
+function Tracker:TrackCouponGain(amount, source)
+    VE_DB = VE_DB or {}
+    VE_DB.couponGains = VE_DB.couponGains or {}
+    VE_DB.taskActualCoupons = VE_DB.taskActualCoupons or {}
+
+    local now = time()
+    local charName = UnitName("player")
+
+    table.insert(VE_DB.couponGains, {
+        amount = amount,
+        source = source,
+        timestamp = now,
+        character = charName,
+    })
+
+    -- Keep only last 100 entries to prevent SavedVariables bloat
+    while #VE_DB.couponGains > 100 do
+        table.remove(VE_DB.couponGains, 1)
+    end
+
+    -- Correlate with pending task from INITIATIVE_TASK_COMPLETED event
+    -- (Activity log isn't updated until AFTER CURRENCY_DISPLAY_UPDATE fires)
+    local correlatedTask = nil
+    local debug = VE.Store:GetState().config.debug
+
+    -- Check for pending task completion (set by EndeavorTracker on INITIATIVE_TASK_COMPLETED)
+    if VE._pendingTaskCompletion then
+        local pending = VE._pendingTaskCompletion
+        local timeDiff = now - (pending.timestamp or 0)
+        if timeDiff <= 5 then  -- Within 5 seconds of task completion
+            correlatedTask = pending.taskName
+            -- Store history of coupon values per task (for DR calculation later)
+            VE_DB.taskActualCoupons[correlatedTask] = VE_DB.taskActualCoupons[correlatedTask] or {}
+            table.insert(VE_DB.taskActualCoupons[correlatedTask], {
+                amount = amount,
+                timestamp = now,
+                character = charName,
+                taskName = pending.taskName,
+                taskID = pending.taskID,
+                isRepeatable = pending.isRepeatable,
+            })
+            -- Keep only last 20 entries per task to prevent bloat
+            while #VE_DB.taskActualCoupons[correlatedTask] > 20 do
+                table.remove(VE_DB.taskActualCoupons[correlatedTask], 1)
+            end
+            if debug then
+                print(string.format("|cFF2aa198[VE Coupon]|r Correlated: %s (ID:%s) = %d coupons (history: %d)",
+                    correlatedTask, tostring(pending.taskID), amount, #VE_DB.taskActualCoupons[correlatedTask]))
+            end
+        end
+        VE._pendingTaskCompletion = nil  -- Clear after use
+    end
+
+    -- Trigger event for UI updates
+    VE.EventBus:Trigger("VE_COUPON_GAINED", { amount = amount, taskName = correlatedTask })
+
+    if debug then
+        local taskStr = correlatedTask and (" -> " .. correlatedTask) or ""
+        print(string.format("|cFF2aa198[VE]|r Coupon gain: +%d%s", amount, taskStr))
+    end
+end
+
+-- Get total coupon gains this session
+function Tracker:GetCouponGainsThisSession()
+    local sessionStart = VE._sessionStart or (time() - 86400)
+    local total = 0
+    for _, gain in ipairs(VE_DB and VE_DB.couponGains or {}) do
+        if gain.timestamp >= sessionStart then
+            total = total + gain.amount
+        end
+    end
+    return total
 end
 
 -- ============================================================================
