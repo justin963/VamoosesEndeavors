@@ -243,21 +243,10 @@ function Tracker:TrackCouponGain(amount, source)
     local now = time()
     local charName = UnitName("player")
 
-    table.insert(VE_DB.couponGains, {
-        amount = amount,
-        source = source,
-        timestamp = now,
-        character = charName,
-    })
-
-    -- Keep only last 100 entries to prevent SavedVariables bloat
-    while #VE_DB.couponGains > 100 do
-        table.remove(VE_DB.couponGains, 1)
-    end
-
     -- Correlate with pending task from INITIATIVE_TASK_COMPLETED event
     -- (Activity log isn't updated until AFTER CURRENCY_DISPLAY_UPDATE fires)
     local correlatedTask = nil
+    local correlatedTaskID = nil
     local debug = VE.Store:GetState().config.debug
 
     -- Check for pending task completion (set by EndeavorTracker on INITIATIVE_TASK_COMPLETED)
@@ -266,6 +255,7 @@ function Tracker:TrackCouponGain(amount, source)
         local timeDiff = now - (pending.timestamp or 0)
         if timeDiff <= 5 then  -- Within 5 seconds of task completion
             correlatedTask = pending.taskName
+            correlatedTaskID = pending.taskID
             -- Store history of coupon values per task (for DR calculation later)
             VE_DB.taskActualCoupons[correlatedTask] = VE_DB.taskActualCoupons[correlatedTask] or {}
             table.insert(VE_DB.taskActualCoupons[correlatedTask], {
@@ -286,6 +276,24 @@ function Tracker:TrackCouponGain(amount, source)
             end
         end
         VE._pendingTaskCompletion = nil  -- Clear after use
+    end
+
+    -- Only store in couponGains if we correlated it with a task
+    -- (avoids storing currency transfers, weekly rewards, etc.)
+    if correlatedTask then
+        table.insert(VE_DB.couponGains, {
+            amount = amount,
+            source = source,
+            timestamp = now,
+            character = charName,
+            taskName = correlatedTask,
+            taskID = correlatedTaskID,
+        })
+
+        -- Keep only last 100 entries to prevent SavedVariables bloat
+        while #VE_DB.couponGains > 100 do
+            table.remove(VE_DB.couponGains, 1)
+        end
     end
 
     -- Trigger event for UI updates

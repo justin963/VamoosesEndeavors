@@ -434,6 +434,35 @@ SlashCmdList["VE"] = function(msg)
                 print("No initiative info available")
             end
         end
+    elseif command == "couponstore" then
+        -- Debug: dump tracked coupon gains from SavedVariables
+        print("|cFF2aa198[VE]|r === Coupon Store Debug ===")
+        VE_DB = VE_DB or {}
+        local gains = VE_DB.couponGains or {}
+        print(string.format("Total entries: %d", #gains))
+        for i, gain in ipairs(gains) do
+            local ts = gain.timestamp and date("%m/%d %H:%M", gain.timestamp) or "?"
+            print(string.format("[%d] %s | %s | %s | +%s | src=%s | taskID=%s",
+                i,
+                ts,
+                gain.character or "?",
+                gain.taskName or "NIL",
+                tostring(gain.amount),
+                tostring(gain.source),
+                tostring(gain.taskID)
+            ))
+        end
+        -- Also dump taskActualCoupons
+        local actual = VE_DB.taskActualCoupons or {}
+        local taskCount = 0
+        for _ in pairs(actual) do taskCount = taskCount + 1 end
+        print(string.format("taskActualCoupons: %d tasks tracked", taskCount))
+        for taskName, history in pairs(actual) do
+            print(string.format("  %s: %d entries, latest=%s",
+                taskName, #history,
+                history[#history] and tostring(history[#history].amount) or "?"
+            ))
+        end
     elseif command == "tasks" then
         -- Debug: dump task structure - search for specific tasks
         print("|cFF2aa198[VE]|r Searching for debug tasks...")

@@ -216,6 +216,67 @@ function VE.UI.Tabs:CreateActivity(parent)
     end)
     container.exportBtn = exportBtn
 
+    -- Coupon view toggle button (uses currency texture)
+    container.showCouponView = false
+    local couponBtn = CreateFrame("Button", nil, feedHeader, "BackdropTemplate")
+    couponBtn:SetSize(18, 14)
+    couponBtn:SetPoint("LEFT", exportBtn, "RIGHT", 4, 0)
+    couponBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    couponBtn:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, 0.8)
+    couponBtn:SetBackdropBorderColor(C.border.r, C.border.g, C.border.b, 0.5)
+
+    -- Get currency texture for Community Coupons
+    local couponIcon = couponBtn:CreateTexture(nil, "ARTWORK")
+    couponIcon:SetSize(12, 12)
+    couponIcon:SetPoint("CENTER", 0, 0)
+    local currencyInfo = C_CurrencyInfo.GetCurrencyInfo(VE.Constants.CURRENCY_IDS.COMMUNITY_COUPONS or 3363)
+    if currencyInfo and currencyInfo.iconFileID then
+        couponIcon:SetTexture(currencyInfo.iconFileID)
+    else
+        couponIcon:SetAtlas("legionarmy-circle-button")  -- Fallback
+    end
+    couponIcon:SetDesaturated(true)
+    couponIcon:SetAlpha(0.5)
+    couponBtn.icon = couponIcon
+
+    function couponBtn:UpdateAppearance()
+        local colors = GetColors()
+        -- Use cyan for coupons (fallback to accent if not defined)
+        local couponColor = colors.coupon or {r=0.16, g=0.63, b=0.60, a=1}  -- Cyan fallback
+        if container.showCouponView then
+            self:SetBackdropColor(couponColor.r, couponColor.g, couponColor.b, 0.4)
+            self:SetBackdropBorderColor(couponColor.r, couponColor.g, couponColor.b, 0.8)
+            self.icon:SetDesaturated(false)
+            self.icon:SetAlpha(1)
+        else
+            self:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
+            self:SetBackdropBorderColor(colors.border.r, colors.border.g, colors.border.b, 0.5)
+            self.icon:SetDesaturated(true)
+            self.icon:SetAlpha(0.5)
+        end
+    end
+
+    couponBtn:SetScript("OnClick", function()
+        container.showCouponView = not container.showCouponView
+        couponBtn:UpdateAppearance()
+        container:Update(true)
+    end)
+    couponBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Toggle: Coupon Earnings")
+        local gainCount = VE_DB and VE_DB.couponGains and #VE_DB.couponGains or 0
+        GameTooltip:AddLine(container.showCouponView
+            and "Click to show activity log"
+            or ("Click to show coupon earnings (" .. gainCount .. " tracked)"), 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    couponBtn:SetScript("OnLeave", GameTooltip_Hide)
+    container.couponBtn = couponBtn
+
     -- Update meOnlyBtn to disable myChars when enabled
     meOnlyBtn:SetScript("OnClick", function()
         container.filterMeOnly = not container.filterMeOnly
@@ -631,6 +692,109 @@ function VE.UI.Tabs:CreateActivity(parent)
     end
 
     -- ========================================================================
+    -- CREATE COUPON ROW (for coupon earnings view)
+    -- ========================================================================
+
+    -- Pool for coupon rows
+    container.couponRows = {}
+
+    local function CreateCouponRow(parentFrame)
+        local C = GetColors()
+        local row = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
+        row:SetHeight(20)
+        row:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = nil,
+        })
+        row:SetBackdropColor(C.panel.r, C.panel.g, C.panel.b, C.panel.a * 0.3)
+
+        -- Time ago
+        local timeText = row:CreateFontString(nil, "OVERLAY")
+        timeText:SetPoint("LEFT", 6, 0)
+        timeText:SetWidth(40)
+        timeText:SetJustifyH("LEFT")
+        timeText:SetTextColor(C.text_dim.r, C.text_dim.g, C.text_dim.b)
+        VE.Theme.ApplyFont(timeText, C)
+        row.timeText = timeText
+
+        -- Character name
+        local charName = row:CreateFontString(nil, "OVERLAY")
+        charName:SetPoint("LEFT", timeText, "RIGHT", 4, 0)
+        charName:SetWidth(70)
+        charName:SetJustifyH("LEFT")
+        charName:SetTextColor(C.accent.r, C.accent.g, C.accent.b)
+        VE.Theme.ApplyFont(charName, C)
+        row.charName = charName
+
+        -- Task name
+        local taskName = row:CreateFontString(nil, "OVERLAY")
+        taskName:SetPoint("LEFT", charName, "RIGHT", 4, 0)
+        taskName:SetPoint("RIGHT", -40, 0)
+        taskName:SetJustifyH("LEFT")
+        taskName:SetTextColor(C.text.r, C.text.g, C.text.b)
+        VE.Theme.ApplyFont(taskName, C)
+        row.taskName = taskName
+
+        -- Coupon amount (cyan fallback if no coupon color defined)
+        local couponColor = C.coupon or {r=0.16, g=0.63, b=0.60, a=1}
+        local amount = row:CreateFontString(nil, "OVERLAY")
+        amount:SetPoint("RIGHT", -6, 0)
+        amount:SetJustifyH("RIGHT")
+        amount:SetTextColor(couponColor.r, couponColor.g, couponColor.b)
+        VE.Theme.ApplyFont(amount, C)
+        row.amount = amount
+
+        function row:SetData(entry)
+            local colors = GetColors()
+
+            -- Format time ago
+            local timeAgo = ""
+            if entry.timestamp then
+                local now = time()
+                local diff = now - entry.timestamp
+                if diff < 60 then
+                    timeAgo = "<1m"
+                elseif diff < 3600 then
+                    timeAgo = math.floor(diff / 60) .. "m"
+                elseif diff < 86400 then
+                    timeAgo = math.floor(diff / 3600) .. "h"
+                else
+                    timeAgo = math.floor(diff / 86400) .. "d"
+                end
+            end
+
+            self.timeText:SetText(timeAgo)
+            self.charName:SetText(entry.character or "Unknown")
+            self.taskName:SetText(entry.taskName or "Unknown Task")
+            self.amount:SetText("+" .. (entry.amount or 0))
+
+            -- Apply theme colors + fonts
+            self.timeText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
+            VE.Theme.ApplyFont(self.timeText, colors)
+
+            self.taskName:SetTextColor(colors.text.r, colors.text.g, colors.text.b, colors.text.a)
+            VE.Theme.ApplyFont(self.taskName, colors)
+
+            local couponColor = colors.coupon or {r=0.16, g=0.63, b=0.60, a=1}
+            self.amount:SetTextColor(couponColor.r, couponColor.g, couponColor.b, couponColor.a or 1)
+            VE.Theme.ApplyFont(self.amount, colors)
+
+            self:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, colors.panel.a * 0.3)
+
+            -- Highlight current player
+            local currentPlayer = UnitName("player")
+            if entry.character == currentPlayer then
+                self.charName:SetTextColor(colors.success.r, colors.success.g, colors.success.b, colors.success.a)
+            else
+                self.charName:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a)
+            end
+            VE.Theme.ApplyFont(self.charName, colors)
+        end
+
+        return row
+    end
+
+    -- ========================================================================
     -- UPDATE FUNCTION
     -- ========================================================================
 
@@ -649,6 +813,77 @@ function VE.UI.Tabs:CreateActivity(parent)
         for _, row in ipairs(self.feedRows) do
             row:Hide()
         end
+        for _, row in ipairs(self.couponRows) do
+            row:Hide()
+        end
+
+        -- ================================================================
+        -- COUPON VIEW MODE
+        -- ================================================================
+        if self.showCouponView then
+            -- Hide empty text and activity-specific elements
+            if self.emptyText then self.emptyText:Hide() end
+            if self.setActiveButton then self.setActiveButton:Hide() end
+            if self.noResultsText then self.noResultsText:Hide() end
+
+            -- Get coupon gains data
+            VE_DB = VE_DB or {}
+            local couponGains = VE_DB.couponGains or {}
+
+            if #couponGains == 0 then
+                -- Show "no data" message
+                if not self.noCouponText then
+                    self.noCouponText = self.scrollContent:CreateFontString(nil, "OVERLAY")
+                    self.noCouponText:SetPoint("CENTER", self.scrollContent, "CENTER", 0, 0)
+                end
+                local colors = GetColors()
+                VE.Theme.ApplyFont(self.noCouponText, colors)
+                self.noCouponText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, colors.text_dim.a)
+                self.noCouponText:SetText("No coupon earnings tracked yet.\nComplete tasks to see actual rewards.")
+                self.noCouponText:Show()
+                self.scrollContent:SetHeight(60)
+                return
+            end
+
+            if self.noCouponText then self.noCouponText:Hide() end
+
+            -- Filter to only show task-correlated gains (ignore weekly rewards, etc.)
+            local sortedGains = {}
+            for _, gain in ipairs(couponGains) do
+                if gain.taskName then  -- Only show entries with known task
+                    table.insert(sortedGains, gain)
+                end
+            end
+            table.sort(sortedGains, function(a, b)
+                return (a.timestamp or 0) > (b.timestamp or 0)
+            end)
+
+            -- Display coupon rows
+            local yOffset = 0
+            local rowHeight = 20
+            local rowSpacing = 1
+
+            for i, gain in ipairs(sortedGains) do
+                local row = self.couponRows[i]
+                if not row then
+                    row = CreateCouponRow(self.scrollContent)
+                    self.couponRows[i] = row
+                end
+
+                row:SetPoint("TOPLEFT", 0, -yOffset)
+                row:SetPoint("TOPRIGHT", 0, -yOffset)
+                row:SetData(gain)
+                row:Show()
+
+                yOffset = yOffset + rowHeight + rowSpacing
+            end
+
+            self.scrollContent:SetHeight(yOffset + 10)
+            return
+        end
+
+        -- Hide coupon-specific elements when in activity view
+        if self.noCouponText then self.noCouponText:Hide() end
 
         -- Get activity log data
         local activityData = VE.EndeavorTracker:GetActivityLogData()
@@ -846,6 +1081,7 @@ function VE.UI.Tabs:CreateActivity(parent)
         -- Update filter button appearances
         if container.meOnlyBtn then container.meOnlyBtn:UpdateAppearance() end
         if container.myCharsBtn then container.myCharsBtn:UpdateAppearance() end
+        if container.couponBtn then container.couponBtn:UpdateAppearance() end
         if container.taskFilterBtn then container.taskFilterBtn:UpdateAppearance() end
         -- Update dropdown colors
         if container.taskDropdown then

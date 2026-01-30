@@ -513,8 +513,27 @@ function VE.UI:CreateProgressBar(parent, options)
     text:SetTextColor(Colors.text.r, Colors.text.g, Colors.text.b)
     container.text = text
 
+    -- Reward icon (shown when progress is maxed)
+    local rewardIcon = container:CreateTexture(nil, "OVERLAY")
+    rewardIcon:SetSize(height - 4, height - 4)
+    rewardIcon:SetPoint("CENTER")
+    rewardIcon:Hide()
+    container.rewardIcon = rewardIcon
+    container.finalRewardTexture = nil
+
     -- Milestone diamonds (if provided)
     container.milestones = {}
+
+    function container:SetFinalReward(rewardQuestID)
+        if not rewardQuestID or rewardQuestID == 0 then
+            self.finalRewardTexture = nil
+            return
+        end
+        local currencyInfo = C_QuestLog.GetQuestRewardCurrencyInfo(rewardQuestID, 1, false)
+        if currencyInfo and currencyInfo.texture then
+            self.finalRewardTexture = currencyInfo.texture
+        end
+    end
 
     function container:SetProgress(current, max)
         local pct = max > 0 and (current / max) or 0
@@ -522,7 +541,17 @@ function VE.UI:CreateProgressBar(parent, options)
 
         local fillWidth = math.max(1, (self:GetWidth() - 4) * pct)
         self.fill:SetWidth(fillWidth)
-        self.text:SetText(string.format("%d / %d", current, max))
+
+        -- When maxed and we have a reward texture, show icon instead of text
+        if current >= max and self.finalRewardTexture then
+            self.text:Hide()
+            self.rewardIcon:SetTexture(self.finalRewardTexture)
+            self.rewardIcon:Show()
+        else
+            self.rewardIcon:Hide()
+            self.text:SetText(string.format("%d / %d", current, max))
+            self.text:Show()
+        end
     end
 
     function container:SetMilestones(milestones, max)

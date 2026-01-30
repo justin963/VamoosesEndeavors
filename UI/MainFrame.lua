@@ -507,9 +507,9 @@ function VE:CreateMainWindow()
             VE.HousingTracker:RequestHouseInfo()
             VE.HousingTracker:UpdateCoupons()
         end
-        -- Request endeavor data for immediate refresh
+        -- Request endeavor data via debounced refresh
         if VE.EndeavorTracker then
-            VE.EndeavorTracker:FetchEndeavorData()
+            VE.EndeavorTracker:QueueDataRefresh()
         end
         -- Update house dropdown
         if VE.EndeavorTracker then
@@ -538,12 +538,21 @@ function VE:CreateMainWindow()
             self.daysRemaining:SetText("")
         end
 
+        -- Set final reward texture from last milestone (for maxed display)
+        local milestones = state.endeavor.milestones
+        if milestones and #milestones > 0 then
+            local finalMilestone = milestones[#milestones]
+            if finalMilestone.rewards and finalMilestone.rewards[1] then
+                self.progressBar:SetFinalReward(finalMilestone.rewards[1].rewardQuestID)
+            end
+        end
+
         self.progressBar:SetProgress(
             state.endeavor.currentProgress or 0,
             state.endeavor.maxProgress or 100
         )
         self.progressBar:SetMilestones(
-            state.endeavor.milestones,
+            milestones,
             state.endeavor.maxProgress or 100
         )
 

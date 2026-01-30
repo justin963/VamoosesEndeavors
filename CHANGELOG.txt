@@ -2,7 +2,7 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
-Version 1.6.9 [In Development]
+Version 1.6.9 (Released January 2026)
 --------------------------------------------------------------------------------
 
 COUPON TRACKING:
@@ -11,6 +11,26 @@ COUPON TRACKING:
 - Coupon column displays tracked values when available (shows actual 5 instead of base 10)
 - Stores history of coupon values per task (last 20 entries) for DR analysis
 - Persists tracked coupon data in SavedVariables for future sessions
+
+UI IMPROVEMENTS:
+- Coupon earnings toggle in Activity tab - view tracked coupon gains with currency icon button
+- Endeavor progress bar shows currency reward icon when progress is maxed
+
+PERFORMANCE:
+- Consolidated event handling with proper debouncing (0.3s) to reduce redundant API calls
+- VE_COUPON_GAINED now routes through QueueDataRefresh instead of direct fetch
+- Removed redundant RefreshTrackedTasks call from INITIATIVE_TASKS_TRACKED_UPDATED
+- Debounced expensive activity log processing (BuildTaskXPCache, BuildTaskRulesFromLog)
+- Removed duplicate SaveCurrentCharacterProgress call (state listener handles it)
+- MainFrame OnShow now uses debounced refresh instead of direct API calls
+- Reduced debug noise: prints only show when work is actually done, not per-event
+
+BUG FIXES:
+- Coupon tracking now only stores task-correlated gains (ignores currency transfers, weekly rewards)
+- Fixed coupon store to include taskName/taskID in saved data for Activity tab display
+
+DEBUG:
+- Added /ve couponstore command to dump tracked coupon gains data
 
 --------------------------------------------------------------------------------
 

@@ -8,11 +8,13 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.8 - House XP Tracking**
+## **What's New in v1.6.9 - Coupon Tracking & Performance**
 
-- **Accurate House XP calculation** - Dynamic scale, two-period cap system (1000 pre/2250 post)
-- **House XP tooltip breakdown** - Shows pre/post cap increase earnings with colored progress
-- **Coupon display fix** - Auto-retries if quest API isn't ready at login
+- **Actual coupon tracking** - See real post-DR coupon rewards (not just base values)
+- **Coupon earnings view** - Toggle in Activity tab to see tracked coupon gains by task
+- **Progress bar reward icon** - Shows currency icon when endeavor progress is maxed
+- **Performance improvements** - Consolidated event handling with proper debouncing
+- **Cleaner operation** - Reduced redundant API calls and eliminated duplicate processing
 
 *See CHANGELOG.txt for complete version history*
 
@@ -45,6 +47,7 @@ Track recent neighborhood activity in real-time.
 - **Top 5 Tasks** - Most completed tasks by your neighborhood
 - **Activity Feed** - Recent completions sorted by time (newest first)
 - **Player Names** - See who completed what and when
+- **Coupon Earnings** - Toggle to view actual post-DR coupon rewards per task
 
 ### **Season Progress**
 See your overall endeavor season progress at a glance.
@@ -132,5 +135,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.8
+**Version:** 1.6.9
 **Game Version:** 12.0.0+ (Midnight)

@@ -77,10 +77,8 @@ function Tracker:Initialize()
 
     -- Listen for coupon gains to refresh task display with actual values
     VE.EventBus:Register("VE_COUPON_GAINED", function(payload)
-        -- Always refresh to show updated values (even if correlation failed)
-        C_Timer.After(0.1, function()
-            VE.EndeavorTracker:FetchEndeavorData()
-        end)
+        -- Use centralized refresh with proper debouncing (0.3s)
+        VE.EndeavorTracker:QueueDataRefresh()
     end)
 
     -- Load previously learned formula values from SavedVariables
@@ -119,17 +117,13 @@ function Tracker:OnEvent(event, ...)
         end)
 
     elseif event == "NEIGHBORHOOD_INITIATIVE_UPDATED" then
-        if debug then
-            print("|cFF2aa198[VE Tracker]|r NEIGHBORHOOD_INITIATIVE_UPDATED")
-        end
+        -- Debug print moved to QueueDataRefresh to reduce noise (Blizzard fires this event multiple times)
         self:QueueDataRefresh()
 
     elseif event == "INITIATIVE_TASKS_TRACKED_UPDATED" then
-        if debug then
-            print("|cFF2aa198[VE Tracker]|r Tracked tasks updated")
-        end
+        -- Debug print moved to QueueDataRefresh to reduce noise (Blizzard fires this event multiple times)
         self:QueueDataRefresh()
-        self:RefreshTrackedTasks()
+        -- RefreshTrackedTasks removed - FetchEndeavorData already updates task state
 
     elseif event == "INITIATIVE_TASKS_TRACKED_LIST_CHANGED" then
         if debug then
@@ -138,14 +132,21 @@ function Tracker:OnEvent(event, ...)
         self:RefreshTrackedTasks()
 
     elseif event == "INITIATIVE_ACTIVITY_LOG_UPDATED" then
-        if debug then
-            print("|cFF2aa198[VE Tracker]|r Activity log updated")
+        -- Debounce expensive activity log processing (0.3s)
+        if self.activityLogProcessTimer then
+            self.activityLogProcessTimer:Cancel()
         end
-        self.activityLogLoaded = true
-        self.activityLogLastUpdated = time()
-        self:BuildTaskXPCache()  -- Rebuild XP cache from activity log
-        self:BuildTaskRulesFromLog()  -- Learn per-task decay rules
-        VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
+        self.activityLogProcessTimer = C_Timer.NewTimer(0.3, function()
+            self.activityLogProcessTimer = nil
+            if VE.Store:GetState().config.debug then
+                print("|cFF2aa198[VE Tracker]|r Activity log processing")
+            end
+            self.activityLogLoaded = true
+            self.activityLogLastUpdated = time()
+            self:BuildTaskXPCache()
+            self:BuildTaskRulesFromLog()
+            VE.EventBus:Trigger("VE_ACTIVITY_LOG_UPDATED", { timestamp = self.activityLogLastUpdated })
+        end)
         self:QueueDataRefresh()
 
     elseif event == "INITIATIVE_TASK_COMPLETED" then
@@ -638,9 +639,7 @@ function Tracker:ProcessInitiativeInfo(info)
             VE.EndeavorTracker:FetchEndeavorData()  -- Re-process to get coupon data
         end)
     end
-
-    -- Save character progress
-    self:SaveCurrentCharacterProgress()
+    -- SaveCurrentCharacterProgress removed - handled by VE_STATE_CHANGED listener with 0.5s debounce
 end
 
 -- Extract current progress from task requirements
