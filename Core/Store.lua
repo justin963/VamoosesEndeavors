@@ -54,6 +54,14 @@ local DEFAULT_STATE = {
     },
     -- Known initiative types (collected over time)
     knownInitiatives = {},  -- {[initiativeID] = {title, firstSeen, lastSeen}}
+    -- Alt sharing for neighborhood leaderboards
+    altSharing = {
+        enabled = false,              -- Consent toggle (opt-in)
+        mainCharacter = nil,          -- "CharName-RealmName" format
+        lastBroadcast = 0,            -- Timestamp of last broadcast
+        receivedMappings = {},        -- { ["Main-Realm"] = { alts = {...}, initiativeId = id } }
+        groupingMode = "individual",  -- "individual" or "byMain"
+    },
 }
 
 -- Deep copy helper
@@ -133,6 +141,15 @@ function VE.Store:LoadFromSavedVariables()
         self.state.knownInitiatives = VE_DB.knownInitiatives
     end
 
+    -- Restore alt sharing state
+    if VE_DB.altSharing then
+        self.state.altSharing.enabled = VE_DB.altSharing.enabled or false
+        self.state.altSharing.mainCharacter = VE_DB.altSharing.mainCharacter
+        -- Don't restore lastBroadcast - allow fresh broadcast each session
+        self.state.altSharing.receivedMappings = VE_DB.altSharing.receivedMappings or {}
+        self.state.altSharing.groupingMode = VE_DB.altSharing.groupingMode or "individual"
+    end
+
     if self.state.config.debug then
         print("|cFF2aa198[VE Store]|r Loaded state from SavedVariables")
     end
@@ -165,13 +182,21 @@ function VE.Store:SaveToSavedVariables()
     -- Save character data (persistent across sessions)
     VE_DB.characters = self.state.characters
 
-    -- Save UI state
-    VE_DB.ui = {
-        selectedCharacter = self.state.ui.selectedCharacter,
-    }
+    -- Save UI state (merge to preserve taskSort, showRewardsHighlight)
+    VE_DB.ui = VE_DB.ui or {}
+    VE_DB.ui.selectedCharacter = self.state.ui.selectedCharacter
 
     -- Save known initiatives (account-wide collection)
     VE_DB.knownInitiatives = self.state.knownInitiatives
+
+    -- Save alt sharing state
+    VE_DB.altSharing = {
+        enabled = self.state.altSharing.enabled,
+        mainCharacter = self.state.altSharing.mainCharacter,
+        lastBroadcast = self.state.altSharing.lastBroadcast,
+        receivedMappings = self.state.altSharing.receivedMappings,
+        groupingMode = self.state.altSharing.groupingMode,
+    }
 
     if self.state.config.debug then
         print("|cFF2aa198[VE Store]|r Saved state to SavedVariables")
@@ -305,5 +330,61 @@ VE.Store:RegisterReducer("RECORD_INITIATIVE", function(state, payload)
         firstSeen = existing and existing.firstSeen or time(),
         lastSeen = time(),
     }
+    return newState
+end)
+
+-- ============================================================================
+-- ALT SHARING REDUCERS
+-- ============================================================================
+
+-- SET_ALT_SHARING_ENABLED: Toggle consent for sharing alt data
+VE.Store:RegisterReducer("SET_ALT_SHARING_ENABLED", function(state, payload)
+    local newState = DeepCopy(state)
+    newState.altSharing.enabled = payload.enabled or false
+    return newState
+end)
+
+-- SET_MAIN_CHARACTER: Set the player's designated main character
+VE.Store:RegisterReducer("SET_MAIN_CHARACTER", function(state, payload)
+    local newState = DeepCopy(state)
+    newState.altSharing.mainCharacter = payload.mainCharacter -- "CharName-RealmName" or nil
+    return newState
+end)
+
+-- SET_LAST_BROADCAST: Update last broadcast timestamp
+VE.Store:RegisterReducer("SET_LAST_BROADCAST", function(state, payload)
+    local newState = DeepCopy(state)
+    newState.altSharing.lastBroadcast = payload.timestamp or time()
+    return newState
+end)
+
+-- UPDATE_RECEIVED_MAPPING: Store received alt data from another player
+VE.Store:RegisterReducer("UPDATE_RECEIVED_MAPPING", function(state, payload)
+    if not payload.mainCharacter then return state end
+    local newState = DeepCopy(state)
+    newState.altSharing.receivedMappings[payload.mainCharacter] = {
+        alts = payload.alts or {},
+        initiativeId = payload.initiativeId,
+    }
+    return newState
+end)
+
+-- SET_GROUPING_MODE: Toggle leaderboard grouping mode
+VE.Store:RegisterReducer("SET_GROUPING_MODE", function(state, payload)
+    local newState = DeepCopy(state)
+    newState.altSharing.groupingMode = payload.mode or "individual"
+    return newState
+end)
+
+-- CLEAR_STALE_MAPPINGS: Remove mappings from ended initiatives
+VE.Store:RegisterReducer("CLEAR_STALE_MAPPINGS", function(state, payload)
+    local activeInitiativeId = payload.activeInitiativeId
+    if not activeInitiativeId then return state end
+    local newState = DeepCopy(state)
+    for mainChar, data in pairs(newState.altSharing.receivedMappings) do
+        if data.initiativeId ~= activeInitiativeId then
+            newState.altSharing.receivedMappings[mainChar] = nil
+        end
+    end
     return newState
 end)

@@ -197,6 +197,11 @@ function VE:OnEnable()
         VE.HousingTracker:Initialize()
     end
 
+    -- Initialize Alt Sharing
+    if VE.AltSharing and VE.AltSharing.Initialize then
+        VE.AltSharing:Initialize()
+    end
+
     -- Initialize Minimap Button
     if VE.Minimap and VE.Minimap.Initialize then
         VE.Minimap:Initialize()

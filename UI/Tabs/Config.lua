@@ -202,10 +202,187 @@ function VE.UI.Tabs:CreateConfig(parent)
     CreateCheckbox("Debug Mode", "debug", "Show debug messages in chat")
 
     -- ========================================================================
-    -- THEME DROPDOWN
+    -- ALT SHARING SECTION
     -- ========================================================================
 
-    yOffset = yOffset - 12  -- Extra spacing before theme section
+    yOffset = yOffset - 4
+
+    local altSharingHeader = VE.UI:CreateSectionHeader(settingsPanel, "Alt Sharing")
+    altSharingHeader:SetPoint("TOPLEFT", 0, yOffset)
+    altSharingHeader:SetPoint("TOPRIGHT", 0, yOffset)
+    container.altSharingHeader = altSharingHeader
+
+    yOffset = yOffset - 10
+
+    -- Consent checkbox
+    local altShareRow = CreateFrame("Frame", nil, settingsPanel)
+    altShareRow:SetHeight(50)
+    altShareRow:SetPoint("TOPLEFT", 12, yOffset)
+    altShareRow:SetPoint("TOPRIGHT", -12, yOffset)
+
+    local altShareColors = GetColors()
+    local altShareCheckbox = CreateFrame("CheckButton", nil, altShareRow, "ChatConfigCheckButtonTemplate")
+    altShareCheckbox:SetPoint("LEFT", 0, 0)
+    altShareCheckbox:SetSize(24, 24)
+    altShareCheckbox:SetHitRectInsets(0, -100, 0, 0)
+
+    local altShareLabel = altShareRow:CreateFontString(nil, "OVERLAY")
+    altShareLabel:SetPoint("LEFT", altShareCheckbox, "RIGHT", 6, 0)
+    VE.Theme.ApplyFont(altShareLabel, altShareColors)
+    altShareLabel:SetText("Share my alts with guildmates")
+    altShareLabel:SetTextColor(altShareColors.text.r, altShareColors.text.g, altShareColors.text.b)
+    altShareRow.label = altShareLabel
+
+    local altShareDesc = altShareRow:CreateFontString(nil, "OVERLAY")
+    altShareDesc:SetPoint("TOPLEFT", altShareLabel, "BOTTOMLEFT", 0, -2)
+    altShareDesc:SetWidth(240)
+    altShareDesc:SetWordWrap(true)
+    VE.Theme.ApplyFont(altShareDesc, altShareColors, "small")
+    altShareDesc:SetText("Enables grouped leaderboard view with guildmates who also use this addon")
+    altShareDesc:SetTextColor(altShareColors.text_dim.r, altShareColors.text_dim.g, altShareColors.text_dim.b)
+    altShareRow.desc = altShareDesc
+
+    -- Get/Set from state
+    local altShareState = VE.Store:GetState()
+    altShareCheckbox:SetChecked(altShareState.altSharing.enabled)
+
+    altShareCheckbox:SetScript("OnClick", function(self)
+        VE.Store:Dispatch("SET_ALT_SHARING_ENABLED", { enabled = self:GetChecked() })
+    end)
+
+    function altShareRow:UpdateColors()
+        local colors = GetColors()
+        self.label:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+        VE.Theme.ApplyFont(self.label, colors)
+        self.desc:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+        VE.Theme.ApplyFont(self.desc, colors, "small")
+    end
+
+    container.altShareRow = altShareRow
+    table.insert(container.checkboxRows, altShareRow)
+
+    yOffset = yOffset - 60
+
+    -- Group by account checkbox
+    local groupByAccountRow = CreateFrame("Frame", nil, settingsPanel)
+    groupByAccountRow:SetHeight(24)
+    groupByAccountRow:SetPoint("TOPLEFT", 12, yOffset)
+    groupByAccountRow:SetPoint("TOPRIGHT", -12, yOffset)
+
+    local groupByAccountColors = GetColors()
+    local groupByAccountCheckbox = CreateFrame("CheckButton", nil, groupByAccountRow, "ChatConfigCheckButtonTemplate")
+    groupByAccountCheckbox:SetPoint("LEFT", 0, 0)
+    groupByAccountCheckbox:SetSize(24, 24)
+    groupByAccountCheckbox:SetHitRectInsets(0, -150, 0, 0)
+
+    local groupByAccountLabel = groupByAccountRow:CreateFontString(nil, "OVERLAY")
+    groupByAccountLabel:SetPoint("LEFT", groupByAccountCheckbox, "RIGHT", 6, 0)
+    VE.Theme.ApplyFont(groupByAccountLabel, groupByAccountColors)
+    groupByAccountLabel:SetText("Group by account in rankings")
+    groupByAccountLabel:SetTextColor(groupByAccountColors.text.r, groupByAccountColors.text.g, groupByAccountColors.text.b)
+    groupByAccountRow.label = groupByAccountLabel
+
+    -- Get/Set from state
+    local groupByAccountState = VE.Store:GetState()
+    groupByAccountCheckbox:SetChecked(groupByAccountState.altSharing.groupingMode == "byMain")
+
+    groupByAccountCheckbox:SetScript("OnClick", function(self)
+        local newMode = self:GetChecked() and "byMain" or "individual"
+        VE.Store:Dispatch("SET_GROUPING_MODE", { mode = newMode })
+        VE.EventBus:Trigger("VE_ALT_MAPPING_UPDATED")  -- Update leaderboard button and refresh
+    end)
+
+    function groupByAccountRow:UpdateColors()
+        local colors = GetColors()
+        self.label:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+        VE.Theme.ApplyFont(self.label, colors)
+    end
+
+    container.groupByAccountRow = groupByAccountRow
+    container.groupByAccountCheckbox = groupByAccountCheckbox
+    table.insert(container.checkboxRows, groupByAccountRow)
+
+    yOffset = yOffset - 32
+
+    -- Main Character dropdown
+    local mainCharRow = CreateFrame("Frame", nil, settingsPanel)
+    mainCharRow:SetHeight(24)
+    mainCharRow:SetPoint("TOPLEFT", 12, yOffset)
+    mainCharRow:SetPoint("TOPRIGHT", -12, yOffset)
+
+    local mainCharColors = GetColors()
+    local mainCharLabel = mainCharRow:CreateFontString(nil, "OVERLAY")
+    mainCharLabel:SetPoint("LEFT", 0, 0)
+    VE.Theme.ApplyFont(mainCharLabel, mainCharColors)
+    mainCharLabel:SetText("Main Character")
+    mainCharLabel:SetTextColor(mainCharColors.text.r, mainCharColors.text.g, mainCharColors.text.b)
+    mainCharRow.label = mainCharLabel
+
+    local mainCharDropdown = VE.UI:CreateDropdown(mainCharRow, {
+        width = 140,
+        height = 22,
+        onSelect = function(key, data)
+            local mainChar = key ~= "" and key or nil
+            VE.Store:Dispatch("SET_MAIN_CHARACTER", { mainCharacter = mainChar })
+            -- Trigger re-broadcast
+            if VE.AltSharing and VE.AltSharing.BroadcastIfEnabled then
+                VE.AltSharing:BroadcastIfEnabled()
+            end
+        end
+    })
+    mainCharDropdown:SetPoint("RIGHT", 0, 0)
+    mainCharRow.dropdown = mainCharDropdown
+
+    -- Populate with characters
+    local function PopulateMainCharDropdown()
+        local items = {{ key = "", label = "(Use current)" }}
+        local state = VE.Store:GetState()
+        for charKey, charData in pairs(state.characters) do
+            if charData.name and charData.realm then
+                local realmNorm = charData.realm:gsub("%s", "")
+                local fullKey = charData.name .. "-" .. realmNorm
+                table.insert(items, { key = fullKey, label = charData.name })
+            end
+        end
+        mainCharDropdown:SetItems(items)
+
+        local currentMain = state.altSharing.mainCharacter
+        if currentMain then
+            local displayName = currentMain:match("^([^-]+)") or currentMain
+            mainCharDropdown:SetSelected(currentMain, { label = displayName })
+        else
+            mainCharDropdown:SetSelected("", { label = "(Use current)" })
+        end
+    end
+    PopulateMainCharDropdown()
+
+    container.mainCharLabel = mainCharLabel
+    container.mainCharDropdown = mainCharDropdown
+
+    yOffset = yOffset - 32
+
+    -- Privacy note
+    local privacyNote = settingsPanel:CreateFontString(nil, "OVERLAY")
+    privacyNote:SetPoint("TOPLEFT", 12, yOffset)
+    privacyNote:SetWidth(290)
+    privacyNote:SetWordWrap(true)
+    VE.Theme.ApplyFont(privacyNote, mainCharColors, "small")
+    privacyNote:SetText("When enabled, your character names are shared with guildmates via hidden addon communication.")
+    privacyNote:SetTextColor(mainCharColors.text_dim.r, mainCharColors.text_dim.g, mainCharColors.text_dim.b)
+    container.privacyNote = privacyNote
+
+    yOffset = yOffset - 44
+
+    -- ========================================================================
+    -- APPEARANCE SECTION
+    -- ========================================================================
+
+    local appearanceHeader = VE.UI:CreateSectionHeader(settingsPanel, "Appearance")
+    appearanceHeader:SetPoint("TOPLEFT", 0, yOffset)
+    appearanceHeader:SetPoint("TOPRIGHT", 0, yOffset)
+    container.appearanceHeader = appearanceHeader
+
+    yOffset = yOffset - 20
 
     local themeRow = CreateFrame("Frame", nil, settingsPanel)
     themeRow:SetHeight(24)
@@ -475,96 +652,7 @@ function VE.UI.Tabs:CreateConfig(parent)
     container.opacityLabel = opacityLabel
     container.opacityValue = opacityValue
 
-    yOffset = yOffset - 36
-
-    -- ========================================================================
-    -- HOUSE XP FORMULA INFO
-    -- ========================================================================
-
-    local formulaHeader = VE.UI:CreateSectionHeader(settingsPanel, "House XP Formula")
-    formulaHeader:SetPoint("TOPLEFT", 0, yOffset)
-    formulaHeader:SetPoint("TOPRIGHT", 0, yOffset)
-    container.formulaHeader = formulaHeader
-
     yOffset = yOffset - 20
-
-    local formulaC = GetColors()
-
-    -- Intro text (~6 lines wrapped)
-    local formulaIntro = settingsPanel:CreateFontString(nil, "OVERLAY")
-    formulaIntro:SetPoint("TOPLEFT", 12, yOffset)
-    formulaIntro:SetWidth(290)
-    formulaIntro:SetJustifyH("LEFT")
-    formulaIntro:SetWordWrap(true)
-    formulaIntro:SetSpacing(2)
-    VE.Theme.ApplyFont(formulaIntro, formulaC, "small")
-    formulaIntro:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    formulaIntro:SetText("House XP is the raw value generated for your neighborhood, separate from your personal Contribution Reward. It decays based on the total number of times your account has completed the task this week (comps).\n\n|cFFcb4b16House XP is capped at 1000 per endeavor.|r")
-    container.formulaIntro = formulaIntro
-
-    yOffset = yOffset - 115
-
-    -- Base Value (~2 lines wrapped)
-    local baseValue = settingsPanel:CreateFontString(nil, "OVERLAY")
-    baseValue:SetPoint("TOPLEFT", 12, yOffset)
-    baseValue:SetWidth(290)
-    baseValue:SetJustifyH("LEFT")
-    baseValue:SetWordWrap(true)
-    VE.Theme.ApplyFont(baseValue, formulaC, "small")
-    baseValue:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    baseValue:SetText("|cFFb58900Base Value:|r The starting XP for a fresh run (e.g., 50 for Lumber, 25 for Hoards).")
-    container.baseValue = baseValue
-
-    yOffset = yOffset - 40
-
-    -- Standard Decay (~3 lines wrapped)
-    local stdDecay = settingsPanel:CreateFontString(nil, "OVERLAY")
-    stdDecay:SetPoint("TOPLEFT", 12, yOffset)
-    stdDecay:SetWidth(290)
-    stdDecay:SetJustifyH("LEFT")
-    stdDecay:SetWordWrap(true)
-    VE.Theme.ApplyFont(stdDecay, formulaC, "small")
-    stdDecay:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    stdDecay:SetText("|cFF859900Standard Decay:|r Most repeatable tasks lose 20% of their Base Value per completion.\nSequence: 100% -> 80% -> 60% -> 40% -> 20% (Floor).")
-    container.stdDecay = stdDecay
-
-    yOffset = yOffset - 55
-
-    -- Accelerated Decay (~4 lines wrapped)
-    local accDecay = settingsPanel:CreateFontString(nil, "OVERLAY")
-    accDecay:SetPoint("TOPLEFT", 12, yOffset)
-    accDecay:SetWidth(290)
-    accDecay:SetJustifyH("LEFT")
-    accDecay:SetWordWrap(true)
-    VE.Theme.ApplyFont(accDecay, formulaC, "small")
-    accDecay:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    accDecay:SetText("|cFFdc322fAccelerated Decay:|r Major Objectives (Weekly Quests, War Creche, Primal Storms) decay faster, losing 25% per completion.\nSequence: 100% -> 75% -> 50% -> 25% (Floor).")
-    container.accDecay = accDecay
-
-    yOffset = yOffset - 70
-
-    -- Exceptions (~2 lines wrapped)
-    local exceptions = settingsPanel:CreateFontString(nil, "OVERLAY")
-    exceptions:SetPoint("TOPLEFT", 12, yOffset)
-    exceptions:SetWidth(290)
-    exceptions:SetJustifyH("LEFT")
-    exceptions:SetWordWrap(true)
-    VE.Theme.ApplyFont(exceptions, formulaC, "small")
-    exceptions:SetTextColor(formulaC.text_dim.r, formulaC.text_dim.g, formulaC.text_dim.b)
-    exceptions:SetText("|cFF6c71c4Exceptions:|r Raid Bosses (Base 5) do not decay for the first 3 kills. One-Time tasks (Base 150) drop instantly to 0.")
-    container.exceptions = exceptions
-
-    yOffset = yOffset - 45
-
-    -- Formula
-    local formula = settingsPanel:CreateFontString(nil, "OVERLAY")
-    formula:SetPoint("TOPLEFT", 12, yOffset)
-    VE.Theme.ApplyFont(formula, formulaC, "small")
-    formula:SetTextColor(formulaC.text.r, formulaC.text.g, formulaC.text.b)
-    formula:SetText("Current Value = Base - (Decay Rate x Completions)")
-    container.formula = formula
-
-    yOffset = yOffset - 30
 
     -- ========================================================================
     -- VERSION INFO (inside scroll content)
@@ -640,6 +728,15 @@ function VE.UI.Tabs:CreateConfig(parent)
             container.opacityValue:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
             VE.Theme.ApplyFont(container.opacityValue, colors)
         end
+        -- Alt sharing section theme updates
+        if container.mainCharLabel then
+            container.mainCharLabel:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
+            VE.Theme.ApplyFont(container.mainCharLabel, colors)
+        end
+        if container.privacyNote then
+            container.privacyNote:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+            VE.Theme.ApplyFont(container.privacyNote, colors, "small")
+        end
         if container.discordEditBox then
             container.discordEditBox:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.8)
         end
@@ -647,50 +744,13 @@ function VE.UI.Tabs:CreateConfig(parent)
             container.discordHint:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b, 0.7)
             VE.Theme.ApplyFont(container.discordHint, colors, "small")
         end
-        -- Formula section theme updates
-        if container.formulaText then
-            container.formulaText:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.formulaText, colors, "small")
-        end
-        if container.formulaExample then
-            container.formulaExample:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.formulaExample, colors, "small")
-        end
-        if container.baseHeader then
-            container.baseHeader:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
-            VE.Theme.ApplyFont(container.baseHeader, colors, "small")
-        end
-        if container.base50 then
-            container.base50:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base50, colors, "small")
-        end
-        if container.base50b then
-            container.base50b:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base50b, colors, "small")
-        end
-        if container.base25 then
-            container.base25:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base25, colors, "small")
-        end
-        if container.base25b then
-            container.base25b:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base25b, colors, "small")
-        end
-        if container.base150 then
-            container.base150:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base150, colors, "small")
-        end
-        if container.base10 then
-            container.base10:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.base10, colors, "small")
-        end
-        if container.progHeader then
-            container.progHeader:SetTextColor(colors.text.r, colors.text.g, colors.text.b)
-            VE.Theme.ApplyFont(container.progHeader, colors, "small")
-        end
-        if container.progExample then
-            container.progExample:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
-            VE.Theme.ApplyFont(container.progExample, colors, "small")
+    end)
+
+    -- Listen for grouping mode changes from leaderboard button
+    VE.EventBus:Register("VE_GROUPING_MODE_CHANGED", function()
+        if container.groupByAccountCheckbox then
+            local state = VE.Store:GetState()
+            container.groupByAccountCheckbox:SetChecked(state.altSharing.groupingMode == "byMain")
         end
     end)
 

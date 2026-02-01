@@ -2,6 +2,38 @@
 Vamoose's Endeavors - Changelog
 ================================================================================
 
+Version 1.7.0 (Released February 2026)
+--------------------------------------------------------------------------------
+
+⭐ ALT SHARING & LEADERBOARD GROUPING (Most Requested Feature!)
+Your #1 requested feature is here! Group contributions by player account in the
+leaderboard, so all your alts show as one combined entry.
+
+NEW FEATURES:
+- Alt Sharing System: Share your alt list with guildmates via hidden addon communication
+  - Opt-in consent: Enable "Share my alts" in Config to participate
+  - Main Character selection: Choose which character represents your account
+  - Privacy-focused: Uses invisible addon messages (not visible in guild chat)
+  - Works across accounts: Guildmates running VE can see your grouped contributions
+
+- Leaderboard Grouping: View rankings by player instead of individual characters
+  - Toggle button in Rankings tab header (friend icon)
+  - "Group by account" checkbox in Config for easy access
+  - Your own alts always group together (even without sharing enabled)
+  - Guildmates who share their alts also appear grouped
+  - Clean display: Shows main character name with combined total
+
+CONFIG TAB IMPROVEMENTS:
+- New "Alt Sharing" section with clear privacy controls
+- Redesigned layout: Alt Sharing → Appearance (Theme, Scale, etc.)
+- Removed House XP Formula section (no longer needed)
+
+BUG FIXES:
+- Fixed task sort state not persisting between sessions (Sort by XP, Coupons, Next XP)
+  - Bug existed since v1.5.0: Store was overwriting VE_DB.ui instead of merging
+
+--------------------------------------------------------------------------------
+
 Version 1.6.9 (Released January 2026)
 --------------------------------------------------------------------------------
 

@@ -8,13 +8,16 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.9 - Coupon Tracking & Performance**
+## ⭐ **What's New in v1.7.0 - Alt Sharing & Leaderboard Grouping**
 
-- **Actual coupon tracking** - See real post-DR coupon rewards (not just base values)
-- **Coupon earnings view** - Toggle in Activity tab to see tracked coupon gains by task
-- **Progress bar reward icon** - Shows currency icon when endeavor progress is maxed
-- **Performance improvements** - Consolidated event handling with proper debouncing
-- **Cleaner operation** - Reduced redundant API calls and eliminated duplicate processing
+**Your #1 most requested feature is here!** Group contributions by player account in the leaderboard, so all your alts show as one combined entry.
+
+- **Alt Sharing** - Opt-in sharing lets guildmates see your alts as one combined leaderboard entry
+- **Leaderboard Grouping** - Toggle button to view rankings by player, not individual characters
+- **Privacy-First Design** - Uses invisible addon messages (not visible in guild chat)
+- **Cross-Account Support** - Guildmates running VE can share and see each other's grouped contributions
+- **Your Alts Always Group** - Even without sharing enabled, your own characters combine automatically
+- **Main Character Selection** - Choose which name represents your account in grouped view
 
 *See CHANGELOG.txt for complete version history*
 
@@ -33,12 +36,21 @@ Track all housing endeavor tasks from the Neighborhood Initiative system.
 - **Task Sorting** - Click column headers to sort by XP or Coupons
 - **House XP Earned** - Estimated total XP with progressive DR formula
 
+### ⭐ **Alt Sharing & Leaderboard Grouping** (NEW!)
+**The most requested feature!** Group contributions by player account.
+
+- **Opt-in Alt Sharing** - Share your alt list with guildmates who use this addon
+- **Leaderboard Grouping** - Toggle to view rankings by player, not character
+- **Privacy-Focused** - Uses hidden addon messages (not visible in guild chat)
+- **Your Alts Always Group** - Even without sharing, your own characters combine
+- **Main Character Selection** - Choose which name represents your account
+
 ### **Contribution Leaderboard**
 See who's contributing the most to your neighborhood!
 
 - **Rankings** - Gold/Silver/Bronze colors for top 3 contributors
 - **Total Contribution** - XP contributed by each member
-- **My Total Row** - Combined contributions across all your alts
+- **Group by Account** - Toggle to combine alts into one leaderboard entry
 - **Player Highlight** - All your characters highlighted in accent color
 
 ### **Activity Feed**
@@ -135,5 +147,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.9
+**Version:** 1.7.0
 **Game Version:** 12.0.0+ (Midnight)

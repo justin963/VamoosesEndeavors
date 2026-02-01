@@ -51,6 +51,77 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
     header:SetPoint("TOPLEFT", 0, UI.sectionHeaderYOffset)
     header:SetPoint("TOPRIGHT", 0, UI.sectionHeaderYOffset)
 
+    -- Grouping toggle button (top-right of header)
+    local groupBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
+    groupBtn:SetSize(75, 16)
+    groupBtn:SetPoint("RIGHT", header, "RIGHT", -12, 0)
+    groupBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = nil,
+    })
+    local groupColors = GetColors()
+    groupBtn:SetBackdropColor(groupColors.panel.r, groupColors.panel.g, groupColors.panel.b, 0.5)
+
+    local groupLabel = groupBtn:CreateFontString(nil, "OVERLAY")
+    groupLabel:SetPoint("LEFT", 6, 0)
+    VE.Theme.ApplyFont(groupLabel, groupColors, "small")
+    groupLabel:SetText("Grouping")
+    groupLabel:SetTextColor(groupColors.text_dim.r, groupColors.text_dim.g, groupColors.text_dim.b)
+    groupBtn.label = groupLabel
+
+    local groupIcon = groupBtn:CreateTexture(nil, "ARTWORK")
+    groupIcon:SetSize(14, 14)
+    groupIcon:SetPoint("LEFT", groupLabel, "RIGHT", 0, 0)
+    groupIcon:SetAtlas("housefinder_neighborhood-friends-icon")
+    groupBtn.icon = groupIcon
+
+    local function UpdateGroupBtnState()
+        local state = VE.Store:GetState()
+        local mode = state.altSharing.groupingMode or "individual"
+        local colors = GetColors()
+        if mode == "byMain" then
+            groupBtn:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.4)
+            groupIcon:SetAlpha(1.0)
+            groupLabel:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
+        else
+            groupBtn:SetBackdropColor(colors.panel.r, colors.panel.g, colors.panel.b, 0.5)
+            groupIcon:SetAlpha(0.5)
+            groupLabel:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
+        end
+    end
+    UpdateGroupBtnState()
+    container.groupBtn = groupBtn
+    container.UpdateGroupBtnState = UpdateGroupBtnState
+
+    groupBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        local state = VE.Store:GetState()
+        local mode = state.altSharing.groupingMode or "individual"
+        if mode == "individual" then
+            GameTooltip:AddLine("Group by Player", 1, 1, 1)
+            GameTooltip:AddLine("Click to combine alt contributions", 0.7, 0.7, 0.7)
+        else
+            GameTooltip:AddLine("Individual View", 1, 1, 1)
+            GameTooltip:AddLine("Click to show individual characters", 0.7, 0.7, 0.7)
+        end
+        GameTooltip:Show()
+    end)
+
+    groupBtn:SetScript("OnLeave", GameTooltip_Hide)
+
+    groupBtn:SetScript("OnClick", function()
+        local state = VE.Store:GetState()
+        local current = state.altSharing.groupingMode or "individual"
+        local newMode = current == "individual" and "byMain" or "individual"
+        VE.Store:Dispatch("SET_GROUPING_MODE", { mode = newMode })
+        UpdateGroupBtnState()
+        if state.config.debug then
+            print("|cFF2aa198[VE Leaderboard]|r Grouping mode changed to:", newMode)
+        end
+        VE.EventBus:Trigger("VE_GROUPING_MODE_CHANGED")  -- Sync with config checkbox
+        container:Update(true)  -- Force update to re-render with new grouping
+    end)
+
     -- ========================================================================
     -- LEADERBOARD LIST (Scrollable)
     -- ========================================================================
@@ -139,11 +210,17 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
 
         if charCount > 0 then
             local colors = GetColors()
+            local state = VE.Store:GetState()
+            local isGrouped = state.altSharing.groupingMode == "byMain"
             self.summaryRow:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.2)
             self.summaryRow:SetBackdropBorderColor(colors.accent.r, colors.accent.g, colors.accent.b, 0.4)
             self.summaryRow.label:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b)
             VE.Theme.ApplyFont(self.summaryRow.label, colors)
-            self.summaryRow.charCount:SetText("(" .. charCount .. " char" .. (charCount > 1 and "s" or "") .. ")")
+            if isGrouped then
+                self.summaryRow.charCount:SetText("(Consolidated)")
+            else
+                self.summaryRow.charCount:SetText("(" .. charCount .. " char" .. (charCount > 1 and "s" or "") .. ")")
+            end
             self.summaryRow.charCount:SetTextColor(colors.text_dim.r, colors.text_dim.g, colors.text_dim.b)
             VE.Theme.ApplyFont(self.summaryRow.charCount, colors, "small")
             self.summaryRow.amount:SetText(string.format("%.1f", totalContrib))
@@ -219,10 +296,10 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
             end
         end)
 
-        function row:SetData(rankNum, playerName, contribution)
+        function row:SetData(rankNum, displayName, contribution, originalName)
             local colors = GetColors()
             self.rank:SetText("#" .. rankNum)
-            self.name:SetText(playerName)
+            self.name:SetText(displayName)
             self.amount:SetText(string.format("%.1f", contribution))
 
             -- Gold/Silver/Bronze colors for top 3, otherwise use text_dim
@@ -240,8 +317,9 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
             self.amount:SetTextColor(colors.endeavor.r, colors.endeavor.g, colors.endeavor.b)
             VE.Theme.ApplyFont(self.amount, colors)
 
-            -- Highlight player's characters (current + alts)
-            self.isCurrentPlayer = IsMyCharacter(playerName)
+            -- Highlight player's characters (use original name for lookup)
+            local checkName = originalName or displayName
+            self.isCurrentPlayer = IsMyCharacter(checkName)
             if self.isCurrentPlayer then
                 self.name:SetTextColor(colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a)
                 self:SetBackdropColor(colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a * 0.15)
@@ -330,10 +408,21 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
             contributions[playerName] = (contributions[playerName] or 0) + amt
         end
 
+        -- Apply grouping if enabled
+        local groupedNames = nil
+        if VE.AltSharing and VE.AltSharing.GroupContributions then
+            contributions, groupedNames = VE.AltSharing:GroupContributions(contributions)
+        end
+
         -- Sort by contribution (highest first)
         local sorted = {}
         for playerName, amt in pairs(contributions) do
-            table.insert(sorted, { name = playerName, amount = amt })
+            -- Build display name: show all grouped chars if grouping is active
+            local displayName = playerName
+            if groupedNames and groupedNames[playerName] and #groupedNames[playerName] > 1 then
+                displayName = table.concat(groupedNames[playerName], ", ")
+            end
+            table.insert(sorted, { name = playerName, displayName = displayName, amount = amt })
         end
         table.sort(sorted, function(a, b) return a.amount > b.amount end)
 
@@ -354,10 +443,17 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
 
             row:SetPoint("TOPLEFT", 0, -yOffset)
             row:SetPoint("TOPRIGHT", 0, -yOffset)
-            row:SetData(i, data.name, data.amount)
+            row:SetData(i, data.displayName or data.name, data.amount, data.name)
             row:Show()
 
             yOffset = yOffset + rowHeight + rowSpacing
+        end
+
+        -- Hide any extra rows from previous update
+        for i = #sorted + 1, #self.rows do
+            if self.rows[i] then
+                self.rows[i]:Hide()
+            end
         end
 
         self.scrollContent:SetHeight(yOffset + 10)
@@ -380,9 +476,22 @@ function VE.UI.Tabs:CreateLeaderboard(parent)
         end
     end)
 
+    -- Listen for alt mapping updates (refresh grouped view)
+    VE.EventBus:Register("VE_ALT_MAPPING_UPDATED", function()
+        if container.UpdateGroupBtnState then
+            container.UpdateGroupBtnState()
+        end
+        if container:IsShown() then
+            container:Update(true)
+        end
+    end)
+
     -- Listen for theme updates to refresh colors
     VE.EventBus:Register("VE_THEME_UPDATE", function()
         ApplyListContainerColors()
+        if container.UpdateGroupBtnState then
+            container.UpdateGroupBtnState()
+        end
         if container:IsShown() then
             container:Update()
         end

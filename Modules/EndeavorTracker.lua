@@ -318,7 +318,13 @@ function Tracker:IsViewingActiveNeighborhood()
 end
 
 -- Consolidated data refresh - debounces multiple event triggers into single fetch
+-- Only refreshes when VE window is visible (reduces Blizzard event spam in cities)
 function Tracker:QueueDataRefresh()
+    -- Skip background fetching when window is closed - OnShow will fetch when opened
+    if not VE.MainFrame or not VE.MainFrame:IsShown() then
+        return
+    end
+
     if self.pendingRefreshTimer then
         self.pendingRefreshTimer:Cancel()
     end
@@ -379,8 +385,9 @@ function Tracker:FetchEndeavorData(_, attempt)
         self.pendingRetryTimer = nil
     end
 
-    if debug then
-        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data..." .. (attempt > 0 and " (attempt " .. attempt .. ")" or "") .. (skipRequest and " (cached)" or " (fresh)"))
+    -- Suppress frequent fetch messages (only show retries)
+    if debug and attempt > 0 then
+        print("|cFF2aa198[VE Tracker]|r Fetching endeavor data (attempt " .. attempt .. ")")
     end
 
     -- Update fetch status
@@ -1233,11 +1240,6 @@ function Tracker:BuildTaskRulesFromLog()
     local logInfo = self:GetActivityLogData()
     if not logInfo or not logInfo.taskActivity then return end
 
-    local debug = VE.Store:GetState().config.debug
-    if debug then
-        print("|cFF2aa198[VE TaskRules]|r Building rules from activity log...")
-    end
-
     -- Start fresh
     self.taskRules = {}
 
@@ -1267,15 +1269,8 @@ function Tracker:BuildTaskRulesFromLog()
                     floorXPTime = recent.time,
                 }
                 floorCount = floorCount + 1
-                if debug then
-                    print(string.format("  %s: floorXP=%.3f", task.name, recent.amount))
-                end
             end
         end
-    end
-
-    if debug then
-        print("|cFF2aa198[VE TaskRules]|r Learned floor XP for " .. floorCount .. " tasks")
     end
 end
 

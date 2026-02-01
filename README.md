@@ -6,11 +6,15 @@ See your neighborhood initiative tasks, track completion across alts, and never 
 
 ---
 
-## **What's New in v1.6.8 - House XP Tracking**
+## **What's New in v1.7.0 - Alt Sharing & Leaderboard Grouping** ⭐
 
-- **Accurate House XP calculation** - Dynamic scale, two-period cap system (1000 pre/2250 post cap increase)
-- **House XP tooltip breakdown** - Shows pre/post cap increase earnings with colored progress
-- **Coupon display fix** - Auto-retries if quest API isn't ready at login
+**Your #1 requested feature is here!** Group contributions by player account in the leaderboard.
+
+- **Alt Sharing** - Opt-in sharing lets guildmates see your alts as one combined entry
+- **Leaderboard Grouping** - Toggle button to view rankings by player, not character
+- **Privacy-First** - Uses invisible addon messages, not guild chat
+- **Works Across Accounts** - Guildmates running VE can share and see grouped contributions
+- **Your Alts Always Group** - Even without sharing enabled, your own characters combine
 
 *See CHANGELOG.txt for complete version history*
 
@@ -29,12 +33,21 @@ Track all housing endeavor tasks from the Neighborhood Initiative system.
 - **Task Sorting** - Click column headers to sort by XP or Coupons
 - **House XP Earned** - Estimated total XP with progressive DR formula
 
+### **Alt Sharing & Leaderboard Grouping** ⭐
+Group contributions by player account - your most requested feature!
+
+- **Opt-in Alt Sharing** - Share your alt list with guildmates who use this addon
+- **Leaderboard Grouping** - Toggle to view rankings by player, not character
+- **Privacy-Focused** - Uses hidden addon messages (not visible in guild chat)
+- **Your Alts Always Group** - Even without sharing, your own characters combine
+- **Main Character Selection** - Choose which name represents your account
+
 ### **Contribution Leaderboard**
 See who's contributing the most to your neighborhood!
 
 - **Rankings** - Gold/Silver/Bronze colors for top 3 contributors
 - **Total Contribution** - XP contributed by each member
-- **My Total Row** - Combined contributions across all your alts
+- **Group by Account** - Toggle to combine alts into one leaderboard entry
 - **Player Highlight** - All your characters highlighted in accent color
 
 ### **Activity Feed**
@@ -137,5 +150,5 @@ We're actively maintaining and improving this addon based on your feedback.
 ---
 
 **Author:** Vamoose
-**Version:** 1.6.8
+**Version:** 1.7.0
 **Game Version:** 12.0.0+ (Midnight)
